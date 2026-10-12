@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "demo": "node clients/demo.js",
+    "client": "node clients/client-dashboard.js",
     "producer": "node clients/producer.js",
     "consumer": "node clients/consumer.js"
   },

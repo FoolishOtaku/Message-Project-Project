@@ -10,7 +10,9 @@ moving from producer → exchange → queue → consumer.
 Features:
 - Direct routing (exact routing-key match) to one or many queues
 - Round-robin load sharing when several consumers read the same queue
-- Messages wait in the queue while no consumer is connected
+- **Persistent SQLite storage** (`node:sqlite`): message history, queue contents, and consumer deliveries survive restarts
+- **Interactive Client Studio** (`http://localhost:3000`): visual producer and consumer dashboard so you don't have to type terminal commands
+- **Consumer Processed Data Inspector** on the main dashboard (`http://localhost:8080`) with filterable history
 - Unroutable messages (no matching queue) are detected and dropped
 - Live animated dashboard with a publish form and event log
 - Zero dependencies: only built-in Node.js modules
@@ -22,7 +24,7 @@ Features:
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) **18 or newer** (check with `node -v`)
+- [Node.js](https://nodejs.org/) **22 or newer** (for native `node:sqlite` support, check with `node -v`)
 - No `npm install` needed
 
 ## How to run
@@ -35,23 +37,36 @@ npm start
 
 This starts:
 - the broker on `tcp://localhost:4000` (for producers & consumers)
-- the dashboard at **http://localhost:8080**
+- the main dashboard at **http://localhost:8080**
+- persistent SQLite storage at `data/kurir.db`
 
-**2. Open the dashboard** in your browser: http://localhost:8080
+**2. Open the Kurir dashboard** in your browser: http://localhost:8080
 
-**3. Generate traffic.** Pick either option.
+**3. Choose how you want to interact:**
 
-**Option A: run the demo** (in a new terminal):
+### Option A: Local Client Studio (Visual UI — No Terminal Typing!)
+Open a second terminal and run:
+
+```bash
+npm run client
+```
+
+Now open **http://localhost:3000** in your browser:
+- **Publish messages** with 1-click presets (`order.created`, `order.paid`, `user.registered`, `order.refunded`) or enter custom JSON.
+- **Spawn consumers** visually by specifying queue and routing keys.
+- **Live consumer inbox**: watch messages processed by your consumers in real time!
+- **Auto-traffic toggle**: click "Start Auto Traffic" to generate continuous traffic.
+
+### Option B: Automated Shop Demo (Terminal)
 
 ```bash
 npm run demo
 ```
 
 This starts a fake online shop with 2 producers and 4 consumers that publishes a message every
-1.5 seconds. Press `Ctrl+C` to stop. For a different speed, give the interval in milliseconds:
-`node clients/demo.js 500`.
+1.5 seconds. Press `Ctrl+C` to stop. For a different speed, pass milliseconds: `node clients/demo.js 500`.
 
-**Option B: run producers and consumers yourself** (each in its own terminal):
+### Option C: Run Producers and Consumers via CLI
 
 ```bash
 # Consumer: queue name, then one or more routing keys to bind
@@ -135,18 +150,30 @@ node clients/consumer.js billing order.created --name worker-1
 
 | Command | Description |
 | --- | --- |
-| `npm start` | Start the broker + dashboard directly |
-| `npm run demo` | Run the demo workload |
-| `npm run producer -- [routingKey] [payload] [--name NAME]` | Send messages |
-| `npm run consumer -- <queue> <keys...> [--name NAME]` | Receive messages |
+| `npm start` | Start the broker + main dashboard (port 8080) |
+| `npm run client` | Start the visual Client Studio (port 3000) |
+| `npm run demo` | Run the automated shop demo workload |
+| `npm run producer -- [routingKey] [payload] [--name NAME]` | Send messages via CLI |
+| `npm run consumer -- <queue> <keys...> [--name NAME]` | Receive messages via CLI |
 
 ## Project structure
 
 ```
 Dockerfile          container build definition (Node 22 Alpine, zero dependencies)
-docker-compose.yml  compose file attaching to existing tunnel_net network
-src/                broker server (protocol.js, broker.js, server.js)
-clients/            client library, producer & consumer CLIs, demo
-public/             dashboard (index.html, style.css, app.js)
+docker-compose.yml  compose file attaching to existing tunnel_net network with persistent data volume
+src/
+  db.js             persistent SQLite storage (node:sqlite)
+  protocol.js       NDJSON wire framing
+  broker.js         broker core (routing, queues, delivery)
+  server.js         TCP :4000 server & HTTP :8080 dashboard
+clients/
+  client.js         TCP client library
+  client-dashboard.js local Client Studio web server (:3000)
+  ui/               Client Studio visual frontend
+  producer.js       CLI producer
+  consumer.js       CLI consumer
+  demo.js           demo shop simulator
+public/             main broker dashboard (:8080) with consumer history viewer
+data/               SQLite database directory (git-ignored)
 ```
 

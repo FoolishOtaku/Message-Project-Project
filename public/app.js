@@ -39,6 +39,11 @@ const els = {
     unroutable: $('stat-unroutable'),
     waiting: $('stat-waiting'),
   },
+  deliveriesGrid: $('deliveries-grid'),
+  filterConsumer: $('filter-consumer'),
+  filterQueue: $('filter-queue'),
+  filterSearch: $('filter-search'),
+  btnRefreshDeliveries: $('btn-refresh-deliveries'),
 };
 
 const ICON = {
@@ -476,6 +481,7 @@ const handlers = {
         bumpCount(state.received, e.clientId);
         hit(clientEl(e.clientId), color);
       });
+    onLiveDelivery(e);
     log('deliver', 'recv', `<b>${esc(e.queue)}</b> → <b>${esc(clientName(e.clientId))}</b> ${keyHtml(e.routingKey)}`);
   },
 };
@@ -550,5 +556,130 @@ els.keySuggestions.addEventListener('click', (ev) => {
 
 els.clearLog.addEventListener('click', () => els.log.replaceChildren());
 
+// ═════════════════════════ Consumer Deliveries History (SQLite) ═════════════════════════
+
+let deliveriesData = [];
+let knownConsumersList = [];
+
+async function loadDeliveries() {
+  const consumer = els.filterConsumer.value;
+  const queue = els.filterQueue.value;
+  const search = els.filterSearch.value.trim();
+
+  const params = new URLSearchParams();
+  if (consumer && consumer !== 'all') params.set('consumer', consumer);
+  if (queue && queue !== 'all') params.set('queue', queue);
+  if (search) params.set('search', search);
+
+  try {
+    const res = await fetch(`/api/deliveries?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch deliveries');
+    const data = await res.json();
+    deliveriesData = data.items || [];
+    knownConsumersList = data.knownConsumers || [];
+    updateConsumerDropdown();
+    updateQueueDropdown();
+    renderDeliveries();
+  } catch (err) {
+    console.error('Failed to load deliveries:', err);
+    els.deliveriesGrid.innerHTML = `<div class="deliveries-empty">Could not load SQLite history: ${esc(err.message)}</div>`;
+  }
+}
+
+function updateConsumerDropdown() {
+  const current = els.filterConsumer.value;
+  const options = ['<option value="all">All Consumers</option>'];
+  for (const c of knownConsumersList) {
+    options.push(`<option value="${esc(c)}"${c === current ? ' selected' : ''}>${esc(c)}</option>`);
+  }
+  els.filterConsumer.innerHTML = options.join('');
+}
+
+function updateQueueDropdown() {
+  const current = els.filterQueue.value;
+  const queueNames = [...state.queues.keys()];
+  const options = ['<option value="all">All Queues</option>'];
+  for (const q of queueNames) {
+    options.push(`<option value="${esc(q)}"${q === current ? ' selected' : ''}>${esc(q)}</option>`);
+  }
+  els.filterQueue.innerHTML = options.join('');
+}
+
+function renderDeliveries() {
+  if (!deliveriesData.length) {
+    els.deliveriesGrid.innerHTML = '<div class="deliveries-empty">No consumer deliveries recorded matching the current filters.</div>';
+    return;
+  }
+
+  els.deliveriesGrid.innerHTML = deliveriesData.map((item) => {
+    const date = new Date(item.deliveredAt);
+    const timeStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+    const payloadStr = item.payload != null
+      ? (typeof item.payload === 'object' ? JSON.stringify(item.payload, null, 2) : String(item.payload))
+      : '(no payload)';
+
+    return `
+      <article class="delivery-card">
+        <div class="delivery-card-top">
+          <span class="delivery-consumer">👤 ${esc(item.consumerName)}</span>
+          <time class="delivery-time" datetime="${date.toISOString()}">${timeStr}</time>
+        </div>
+        <div class="delivery-card-tags">
+          <span class="key-chip" style="--key-color:${colorFor(item.routingKey)}">🏷️ ${esc(item.routingKey)}</span>
+          <span class="key-chip" style="--key-color:var(--teal)">📦 queue: ${esc(item.queue)}</span>
+        </div>
+        <pre class="delivery-payload-box">${esc(payloadStr)}</pre>
+        <div class="delivery-card-foot">
+          <span>msg: <code>${esc(item.messageId)}</code></span>
+          <span>pub by: <b>${esc(item.publishedBy || 'client')}</b></span>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function onLiveDelivery(e) {
+  const item = {
+    messageId: e.messageId,
+    routingKey: e.routingKey,
+    queue: e.queue,
+    consumerId: e.clientId,
+    consumerName: e.consumerName || clientName(e.clientId),
+    deliveredAt: Date.now(),
+    payload: e.payload,
+    publishedBy: e.publishedBy || '',
+  };
+
+  if (!knownConsumersList.includes(item.consumerName)) {
+    knownConsumersList.push(item.consumerName);
+    updateConsumerDropdown();
+  }
+
+  // Prepend to visible list if matches current filters
+  const currentConsumer = els.filterConsumer.value;
+  const currentQueue = els.filterQueue.value;
+  const matchesConsumer = currentConsumer === 'all' || currentConsumer === item.consumerName;
+  const matchesQueue = currentQueue === 'all' || currentQueue === item.queue;
+
+  if (matchesConsumer && matchesQueue) {
+    deliveriesData.unshift(item);
+    if (deliveriesData.length > 100) deliveriesData.pop();
+    renderDeliveries();
+  }
+}
+
+// Filter listeners
+els.filterConsumer.addEventListener('change', loadDeliveries);
+els.filterQueue.addEventListener('change', loadDeliveries);
+
+let searchDebounceTimer = null;
+els.filterSearch.addEventListener('input', () => {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(loadDeliveries, 300);
+});
+
+els.btnRefreshDeliveries.addEventListener('click', loadDeliveries);
+
 renderAll();
 connect();
+loadDeliveries();

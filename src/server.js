@@ -93,15 +93,39 @@ const MIME = {
 };
 
 const httpServer = http.createServer((req, res) => {
-  const { pathname } = new URL(req.url, 'http://localhost');
+  const url = new URL(req.url, 'http://localhost');
+  const pathname = url.pathname;
+
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+    });
+    return res.end();
+  }
 
   if (req.method === 'GET' && pathname === '/events') return handleEvents(req, res);
   if (req.method === 'GET' && pathname === '/api/state') return sendJson(res, 200, broker.snapshot());
+  if (req.method === 'GET' && pathname === '/api/deliveries') return handleDeliveries(req, res, url);
   if (req.method === 'POST' && pathname === '/api/publish') return handlePublish(req, res);
   if (req.method === 'GET') return serveStatic(pathname, res);
 
   sendJson(res, 405, { error: 'Method not allowed' });
 });
+
+function handleDeliveries(req, res, url) {
+  const consumer = url.searchParams.get('consumer') || 'all';
+  const queue = url.searchParams.get('queue') || 'all';
+  const search = url.searchParams.get('search') || '';
+  const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
+  const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+
+  const items = broker.getDeliveries({ consumer, queue, search, limit, offset });
+  const knownConsumers = broker.getKnownConsumers();
+  sendJson(res, 200, { items, knownConsumers });
+}
 
 /** Server-Sent Events: a one-way live stream of every broker event. */
 function handleEvents(req, res) {
@@ -163,7 +187,12 @@ function serveStatic(pathname, res) {
 }
 
 function sendJson(res, status, obj) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  });
   res.end(JSON.stringify(obj));
 }
 

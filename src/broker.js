@@ -20,12 +20,15 @@
 const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
 
+const { Storage } = require('./db');
+
 const shortId = () => randomUUID().slice(0, 8);
 
 class Broker extends EventEmitter {
-  constructor() {
+  constructor(storage = new Storage()) {
     super();
     this.setMaxListeners(100); // one listener per open dashboard tab
+    this.storage = storage;
 
     /** @type {Map<string, Queue>} queueName → queue */
     this.queues = new Map();
@@ -34,7 +37,23 @@ class Broker extends EventEmitter {
     /** @type {Map<string, Client>} clientId → client */
     this.clients = new Map();
 
-    this.stats = { published: 0, routed: 0, delivered: 0, unroutable: 0 };
+    const dbStats = this.storage.getStats();
+    this.stats = {
+      published: dbStats.totalStoredMessages,
+      routed: dbStats.totalStoredMessages - dbStats.unroutable,
+      delivered: dbStats.totalDeliveries,
+      unroutable: dbStats.unroutable,
+    };
+
+    this.#restorePendingQueues();
+  }
+
+  #restorePendingQueues() {
+    const saved = this.storage.loadPendingQueues();
+    for (const [queueName, messages] of saved.entries()) {
+      const queue = this.declareQueue(queueName);
+      queue.messages.push(...messages);
+    }
   }
 
   // ───────────────────────── Clients ─────────────────────────
@@ -135,14 +154,18 @@ class Broker extends EventEmitter {
 
     if (targets.length === 0) {
       this.stats.unroutable++;
+      this.storage.savePublishedMessage(message, 'unroutable');
       this.#emit('message.unroutable', { messageId: message.id, routingKey });
       return { id: message.id, routedTo: [] };
     }
 
-    // 2. Put a copy into every matching queue.
+    this.storage.savePublishedMessage(message, 'published');
+
+    // 2. Put a copy into every matching queue and persist to queue table.
     for (const queueName of targets) {
       const queue = this.queues.get(queueName);
       queue.messages.push(message);
+      this.storage.enqueue(queueName, message.id, message.timestamp);
       this.stats.routed++;
       this.#emit('message.routed', {
         messageId: message.id,
@@ -166,6 +189,10 @@ class Broker extends EventEmitter {
       const consumer = this.clients.get(queue.consumers[index]);
       const message = queue.messages.shift();
 
+      // Dequeue from pending storage and record permanent consumer delivery history
+      this.storage.dequeue(queue.name, message.id);
+      this.storage.recordDelivery(message.id, queue.name, consumer.id, consumer.name, Date.now());
+
       consumer.deliver(message, queue.name);
       this.stats.delivered++;
       this.#emit('message.delivered', {
@@ -173,9 +200,20 @@ class Broker extends EventEmitter {
         routingKey: message.routingKey,
         queue: queue.name,
         clientId: consumer.id,
+        consumerName: consumer.name,
+        payload: message.payload,
+        publishedBy: message.publishedBy,
         depth: queue.messages.length,
       });
     }
+  }
+
+  getDeliveries(filters) {
+    return this.storage.getDeliveries(filters);
+  }
+
+  getKnownConsumers() {
+    return this.storage.getKnownConsumers();
   }
 
   // ───────────────────────── Introspection ─────────────────────────

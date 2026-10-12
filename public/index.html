@@ -109,6 +109,50 @@
     </aside>
   </main>
 
+  <section class="deliveries-container">
+    <div class="glass deliveries-section" id="deliveries-section">
+      <div class="deliveries-header">
+        <div>
+          <div class="deliveries-title-row">
+            <h2 class="deliveries-title">Consumer Processed Data History</h2>
+            <span class="sqlite-pill">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+              SQLite Database
+            </span>
+          </div>
+          <p class="deliveries-sub">Inspect past messages received and processed by each consumer in a human-readable format</p>
+        </div>
+
+        <div class="deliveries-toolbar">
+          <div class="filter-item">
+            <label for="filter-consumer">Consumer</label>
+            <select id="filter-consumer">
+              <option value="all">All Consumers</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label for="filter-queue">Queue</label>
+            <select id="filter-queue">
+              <option value="all">All Queues</option>
+            </select>
+          </div>
+          <div class="filter-item filter-search">
+            <label for="filter-search">Search</label>
+            <input type="text" id="filter-search" placeholder="Filter key, payload, id..." spellcheck="false">
+          </div>
+          <button type="button" class="btn-ghost deliveries-refresh-btn" id="btn-refresh-deliveries" title="Refresh SQLite data">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="deliveries-grid" id="deliveries-grid">
+        <div class="deliveries-empty">Loading past consumer deliveries from SQLite...</div>
+      </div>
+    </div>
+  </section>
+
   <footer class="footer">
     Producers and consumers connect over <code>tcp://localhost:4000</code>. Run <code>npm run demo</code> for a sample workload.
   </footer>

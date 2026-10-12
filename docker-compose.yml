@@ -14,6 +14,9 @@ services:
       - "4000:4000"
       # Optional: uncomment to also access the dashboard locally on NixOS via http://127.0.0.1:8080
       # - "127.0.0.1:8080:8080"
+    volumes:
+      # Persistent SQLite database volume
+      - ./data:/app/data
     networks:
       - tunnel_net
 

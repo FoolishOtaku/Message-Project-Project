@@ -151,28 +151,31 @@ Message Project Project/
 ├── CODEBASE_GUIDE.md     ← this file
 │
 ├── src/                  ← THE BROKER (server side)
-│   ├── protocol.js       ← ① how messages are packaged into bytes on the wire
-│   ├── broker.js         ← ② the brain: queues, bindings, routing   ⭐ most important
-│   └── server.js         ← ③ opens ports 4000 & 8080 and connects them to the brain
+│   ├── db.js             ← ① persistent SQLite storage (built-in node:sqlite)
+│   ├── protocol.js       ← ② how messages are packaged into bytes on the wire
+│   ├── broker.js         ← ③ the brain: queues, bindings, routing   ⭐ most important
+│   └── server.js         ← ④ opens ports 4000 & 8080 and connects them to the brain
 │
 ├── clients/              ← PROGRAMS THAT USE THE BROKER
-│   ├── client.js         ← ④ small helper library to connect/publish/subscribe
-│   ├── producer.js       ← ⑤ command-line tool to SEND messages
-│   ├── consumer.js       ← ⑤ command-line tool to RECEIVE messages
-│   └── demo.js           ← ⑥ fake online shop that generates traffic automatically
+│   ├── client.js         ← ⑤ small helper library to connect/publish/subscribe
+│   ├── client-dashboard.js ← ⑥ visual Client Studio web server (port 3000)
+│   ├── ui/               ← ⑦ Client Studio web interface
+│   ├── producer.js       ← CLI tool to SEND messages
+│   ├── consumer.js       ← CLI tool to RECEIVE messages
+│   └── demo.js           ← fake online shop that generates traffic automatically
 │
-└── public/               ← THE DASHBOARD (runs in your browser)
-    ├── index.html        ← ⑦ page structure
-    ├── style.css         ←   page looks
-    └── app.js            ← ⑧ receives live events and animates them
+├── public/               ← THE MAIN DASHBOARD (runs in your browser, port 8080)
+│   ├── index.html        ← page structure with consumer history inspector
+│   ├── style.css         ← page styling
+│   └── app.js            ← receives live events and loads SQLite delivery history
+│
+└── data/                 ← PERSISTENT DATABASE (stores kurir.db)
 ```
 
-**Recommended reading order:** follow the numbers ① → ⑧. If you only have time for one
-file, read **`src/broker.js`**. It's the actual message broker. Everything else is
-plumbing (networking) or presentation (dashboard).
+**Recommended reading order:** follow the files in `src/` starting with `db.js` and `broker.js`. If you only have time for one file, read **`src/broker.js`**. It's the actual message broker. Everything else is plumbing (networking) or presentation (dashboard).
 
-> **There are no external libraries.** Everything uses only what's built into Node.js
-> (`net`, `http`, `fs`, `events`, `crypto`…). That's why there's no `node_modules` folder
+> **There are no external npm libraries.** Everything uses only what's built into Node.js 22+
+> (`node:sqlite`, `net`, `http`, `fs`, `events`, `crypto`…). That's why there's no `node_modules` folder
 > and no `npm install` step.
 
 ---
