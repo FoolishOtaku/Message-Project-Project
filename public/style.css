@@ -518,6 +518,27 @@ code { font-family: var(--font-mono); font-size: 0.85em; background: var(--surfa
   color: #07080f;
   font-weight: 600;
 }
+.btn-inspect-pill {
+  background: rgba(20, 184, 166, 0.22);
+  border: 1px solid var(--teal);
+  color: #5eead4;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s;
+  box-shadow: 0 0 10px rgba(20, 184, 166, 0.15);
+}
+.btn-inspect-pill:hover {
+  background: var(--teal);
+  color: #07080f;
+  box-shadow: 0 0 16px rgba(20, 184, 166, 0.45);
+  transform: translateY(-1px);
+}
 
 /* ═════════════════════════ Consumer Modal Popout ═════════════════════════ */
 .modal-backdrop {

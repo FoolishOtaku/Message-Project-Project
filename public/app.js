@@ -196,7 +196,7 @@ function renderClients() {
         </div>
         <div class="node-right">
           <div class="node-count" title="Messages received">${state.received.get(c.id) ?? 0}</div>
-          <span class="node-click-pill">Inspect ↗</span>
+          <button type="button" class="btn-inspect-pill">🔍 Inspect ↗</button>
         </div>`,
     }),
     pastConsumersEmpty
