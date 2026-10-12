@@ -299,6 +299,15 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
+      transition: all 0.15s;
+    }
+    .consumer-card.clickable {
+      cursor: pointer;
+    }
+    .consumer-card.clickable:hover {
+      border-color: var(--teal);
+      background: rgba(20, 184, 166, 0.08);
+      box-shadow: 0 4px 16px -4px rgba(20, 184, 166, 0.25);
     }
     .consumer-info strong {
       font-size: 0.88rem;
@@ -315,6 +324,21 @@
       color: var(--teal);
       padding: 2px 8px;
       border-radius: 999px;
+    }
+    .btn-inspect {
+      background: rgba(20, 184, 166, 0.14);
+      border: 1px solid rgba(20, 184, 166, 0.35);
+      color: var(--teal);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .btn-inspect:hover {
+      background: var(--teal);
+      color: #0b0d17;
     }
     .btn-remove {
       background: transparent;
@@ -346,23 +370,28 @@
       overflow-y: auto;
       padding-right: 4px;
     }
-    .msg-card {
+
+    /* ═════════════════════════ Human-Readable Message Card ═════════════════════════ */
+    .readable-msg-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 14px 16px;
+      overflow: hidden;
       transition: border-color 0.15s;
       animation: enter 0.25s ease-out;
     }
-    .msg-card:hover { border-color: rgba(255, 255, 255, 0.2); }
+    .readable-msg-card:hover { border-color: rgba(255, 255, 255, 0.2); }
     @keyframes enter { from { opacity: 0; transform: translateY(-4px); } }
 
-    .msg-top {
+    .readable-msg-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      margin-bottom: 8px;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.25);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      flex-wrap: wrap;
     }
     .tag {
       font-family: var(--font-mono);
@@ -383,22 +412,210 @@
     }
     .tag-consumer {
       background: rgba(255, 255, 255, 0.08);
-      color: var(--text-dim);
+      color: #f1f5f9;
+      cursor: pointer;
+    }
+    .tag-consumer:hover {
+      background: rgba(20, 184, 166, 0.2);
+      color: var(--teal);
     }
     .msg-time {
       font-size: 0.74rem;
       color: var(--text-faint);
     }
-    .msg-body {
-      background: var(--bg);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 8px;
-      padding: 10px 12px;
+
+    .readable-card-body {
+      padding: 12px 14px;
+    }
+    .attr-table {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 8px;
+    }
+    .attr-row {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 6px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .attr-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .attr-value {
+      font-size: 0.85rem;
+      color: var(--text);
+      font-weight: 500;
+      word-break: break-word;
+    }
+    .val-currency {
       font-family: var(--font-mono);
-      font-size: 0.8rem;
+      color: #34d399;
+      font-weight: 700;
+    }
+    .val-id {
+      font-family: var(--font-mono);
+      background: rgba(124, 92, 255, 0.15);
+      color: #c4b5fd;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.74rem;
+      font-weight: 600;
+    }
+    .status-ok {
+      background: rgba(20, 184, 166, 0.15);
+      color: var(--teal);
+    }
+    .status-no {
+      background: rgba(244, 63, 94, 0.15);
+      color: var(--rose);
+    }
+    .pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .pill-item {
+      font-size: 0.72rem;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+    }
+    .raw-json-details {
+      margin-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 6px;
+    }
+    .raw-json-summary {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+      font-family: var(--font-mono);
+    }
+    .raw-json-summary:hover { color: var(--text); }
+    .raw-json-box {
+      margin-top: 6px;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
       color: #cbd5e1;
+      overflow-x: auto;
       white-space: pre-wrap;
-      word-break: break-all;
+    }
+    .readable-text-box {
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    /* Modal Backdrop & Dialog */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 5, 12, 0.82);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      animation: enter 0.2s ease-out;
+    }
+    .modal-dialog {
+      width: 100%;
+      max-width: 800px;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      background: #111424;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius);
+      box-shadow: 0 30px 90px -20px rgba(0, 0, 0, 0.9);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 16px 20px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .modal-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: var(--teal-bg);
+      color: var(--teal);
+      display: grid;
+      place-items: center;
+      font-size: 1.1rem;
+    }
+    .modal-consumer-name {
+      margin: 0;
+      font-size: 1.15rem;
+      font-family: var(--font-display);
+      color: #fff;
+    }
+    .modal-close-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-size: 0.9rem;
+    }
+    .modal-close-btn:hover {
+      background: rgba(244, 63, 94, 0.2);
+      color: var(--rose);
+      border-color: var(--rose);
+    }
+    .modal-summary-bar {
+      padding: 8px 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-body {
+      padding: 16px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
     }
 
     .empty-state {
@@ -461,10 +678,10 @@
           <span>📤 Publish Message (Producer)</span>
         </div>
         <div class="presets">
-          <button class="preset-btn" data-key="order.created" data-payload='{"orderId": 1042, "total": 250000, "customer": "Budi Santoso"}'>🛒 order.created</button>
-          <button class="preset-btn" data-key="order.paid" data-payload='{"orderId": 1042, "method": "qris", "paid": true}'>💳 order.paid</button>
+          <button class="preset-btn" data-key="order.created" data-payload='{"orderId": 1042, "total": 250000, "customer": "Budi Santoso", "items": ["Mechanical Keyboard", "Desk Mat"]}'>🛒 order.created</button>
+          <button class="preset-btn" data-key="order.paid" data-payload='{"orderId": 1042, "method": "qris", "paid": true, "amount": 250000}'>💳 order.paid</button>
           <button class="preset-btn" data-key="user.registered" data-payload='{"userId": 99, "name": "Citra Lestari", "email": "citra@example.com"}'>👤 user.registered</button>
-          <button class="preset-btn warn" data-key="order.refunded" data-payload='{"orderId": 1042, "reason": "Cancel"}'>🚫 order.refunded (Unroutable)</button>
+          <button class="preset-btn warn" data-key="order.refunded" data-payload='{"orderId": 1042, "reason": "Customer cancellation"}'>🚫 order.refunded (Unroutable)</button>
         </div>
 
         <form id="form-publish">
@@ -474,7 +691,7 @@
           </div>
           <div class="form-group">
             <label for="input-payload">Payload (JSON or text)</label>
-            <textarea id="input-payload" spellcheck="false">{"orderId": 1042, "total": 250000, "customer": "Budi Santoso"}</textarea>
+            <textarea id="input-payload" spellcheck="false">{"orderId": 1042, "total": 250000, "customer": "Budi Santoso", "items": ["Mechanical Keyboard", "Desk Mat"]}</textarea>
           </div>
           <button type="submit" class="btn" id="btn-publish">Send to Broker</button>
           <div class="publish-feedback" id="publish-feedback"></div>
@@ -503,7 +720,10 @@
         </form>
 
         <div style="margin-top: 16px;">
-          <label>Active Connected Consumers</label>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="margin-bottom:0;">Active Connected Consumers</label>
+            <span style="font-size:0.72rem; color:var(--teal);">Click consumer to pop out messages ↗</span>
+          </div>
           <div class="consumers-list" id="consumers-list">
             <div class="empty-state" style="padding: 16px;">No consumers active yet. Create one above!</div>
           </div>
@@ -531,12 +751,40 @@
     </div>
   </main>
 
+  <!-- Consumer Popout Modal -->
+  <div class="modal-backdrop" id="consumer-modal" style="display:none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon">👤</div>
+          <div>
+            <h3 class="modal-consumer-name" id="modal-consumer-name">Consumer</h3>
+            <p style="font-size:0.76rem; color:var(--text-dim);" id="modal-consumer-meta">Queue: billing</p>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="text" id="modal-search" placeholder="Search in messages..." style="padding:6px 10px; font-size:0.8rem; width:180px;">
+          <button type="button" class="btn-secondary" id="modal-btn-refresh">Refresh</button>
+          <button type="button" class="modal-close-btn" id="modal-btn-close">✕</button>
+        </div>
+      </div>
+      <div class="modal-summary-bar">
+        <span>Showing <strong id="modal-count" style="color:var(--teal);">0</strong> messages routed to this consumer</span>
+        <span style="color:var(--text-faint); font-size:0.72rem;">Human-Readable View</span>
+      </div>
+      <div class="modal-body" id="modal-messages-list">
+        <div class="empty-state">Loading messages...</div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const $ = (id) => document.getElementById(id);
 
     let consumers = [];
     let messages = [];
     let simulatorRunning = false;
+    let activeModalConsumer = null;
 
     const inputBrokerUrl = $('input-broker-url');
     const btnSaveBroker = $('btn-save-broker');
@@ -718,7 +966,8 @@
     });
 
     // Disconnect Consumer
-    async function stopConsumer(consumerId) {
+    async function stopConsumer(consumerId, ev) {
+      if (ev) ev.stopPropagation();
       await fetch('/api/consumer/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -734,17 +983,174 @@
         return;
       }
       el.innerHTML = consumers.map(c => `
-        <div class="consumer-card">
+        <div class="consumer-card clickable" onclick="openConsumerModal('${escapeHtml(c.name)}')">
           <div class="consumer-info">
             <strong>${escapeHtml(c.name)}</strong>
             <span>Queue: <code>${escapeHtml(c.queue)}</code> ← [${c.bindingKeys.map(escapeHtml).join(', ')}]</span>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <span class="consumer-count" title="Received messages">${c.receivedCount} received</span>
-            <button class="btn-remove" onclick="stopConsumer('${c.id}')">Disconnect</button>
+            <button class="btn-inspect" title="Inspect routed messages">Inspect ↗</button>
+            <span class="consumer-count" title="Received messages">${c.receivedCount}</span>
+            <button class="btn-remove" onclick="stopConsumer('${c.id}', event)">✕</button>
           </div>
         </div>
       `).join('');
+    }
+
+    // ═════════════════════════ Human-Readable Payload Formatter ═════════════════════════
+
+    function formatKeyLabel(key) {
+      const specialMap = {
+        orderid: 'Order ID',
+        customerid: 'Customer ID',
+        userid: 'User ID',
+        productid: 'Product ID',
+        id: 'ID',
+        qris: 'QRIS',
+        url: 'URL',
+        api: 'API',
+        registeredat: 'Registered At',
+        createdat: 'Created At',
+      };
+      const lower = String(key).toLowerCase();
+      if (specialMap[lower]) return specialMap[lower];
+
+      return String(key)
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .trim();
+    }
+
+    function formatValue(key, val) {
+      if (val === null || val === undefined) {
+        return '<span style="color:var(--text-faint);">—</span>';
+      }
+
+      const keyLower = String(key).toLowerCase();
+
+      if (typeof val === 'boolean') {
+        return val
+          ? '<span class="status-badge status-ok">✔ Yes (Confirmed)</span>'
+          : '<span class="status-badge status-no">✖ No (False)</span>';
+      }
+
+      if (typeof val === 'number') {
+        if (keyLower.includes('total') || keyLower.includes('amount') || keyLower.includes('price') || keyLower.includes('fee')) {
+          return `<span class="val-currency">💰 Rp ${val.toLocaleString()}</span>`;
+        }
+        if (keyLower.includes('id')) {
+          return `<code class="val-id">#${val}</code>`;
+        }
+        return `<span style="font-family:var(--font-mono); color:#93c5fd; font-weight:600;">${val.toLocaleString()}</span>`;
+      }
+
+      if (Array.isArray(val)) {
+        if (val.length === 0) return '<span style="color:var(--text-faint);">(empty list)</span>';
+        if (val.every(x => typeof x !== 'object')) {
+          return `
+            <div class="pill-list">
+              ${val.map(item => `<span class="pill-item">${escapeHtml(String(item))}</span>`).join('')}
+            </div>
+          `;
+        }
+        return renderHumanReadablePayload(val);
+      }
+
+      if (typeof val === 'object') {
+        return renderHumanReadablePayload(val);
+      }
+
+      const str = String(val);
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
+        return `<a href="mailto:${escapeHtml(str)}" style="color:#67e8f9; text-decoration:none;">✉️ ${escapeHtml(str)}</a>`;
+      }
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          return `<span style="font-size:0.8rem; color:#93c5fd;">📅 ${d.toLocaleDateString()} ${d.toLocaleTimeString()}</span>`;
+        }
+      }
+      if (keyLower.includes('method') || keyLower.includes('status')) {
+        return `<span class="status-badge" style="background:var(--violet-bg); color:#a78bfa;">${escapeHtml(str.toUpperCase())}</span>`;
+      }
+
+      return `<span>${escapeHtml(str)}</span>`;
+    }
+
+    function renderHumanReadablePayload(payload) {
+      if (payload == null) return '<div style="color:var(--text-faint); font-size:0.8rem;">No payload data</div>';
+
+      let data = payload;
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          return `<div class="readable-text-box">💬 ${escapeHtml(data)}</div>`;
+        }
+      }
+
+      if (typeof data !== 'object') {
+        return `<div class="readable-text-box">${formatValue('Value', data)}</div>`;
+      }
+
+      if (Array.isArray(data)) {
+        if (data.length === 0) return '<div style="color:var(--text-faint); font-size:0.8rem;">Empty list [ ]</div>';
+        return `
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            ${data.map((item, idx) => `
+              <div style="display:flex; align-items:flex-start; gap:8px;">
+                <span style="font-family:var(--font-mono); font-size:0.72rem; color:var(--text-dim);">#${idx + 1}</span>
+                <div style="flex:1;">${renderHumanReadablePayload(item)}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      const entries = Object.entries(data);
+      if (entries.length === 0) return '<div style="color:var(--text-faint); font-size:0.8rem;">Empty object { }</div>';
+
+      const rowsHtml = entries.map(([k, v]) => `
+        <div class="attr-row">
+          <div class="attr-label">${escapeHtml(formatKeyLabel(k))}</div>
+          <div class="attr-value">${formatValue(k, v)}</div>
+        </div>
+      `).join('');
+
+      const rawJson = JSON.stringify(data, null, 2);
+
+      return `
+        <div class="readable-card-body">
+          <div class="attr-table">${rowsHtml}</div>
+          <details class="raw-json-details">
+            <summary class="raw-json-summary">🔍 View Raw JSON</summary>
+            <pre class="raw-json-box"><code>${escapeHtml(rawJson)}</code></pre>
+          </details>
+        </div>
+      `;
+    }
+
+    function renderMessageCard(m) {
+      const time = new Date(m.receivedAt || m.timestamp || Date.now()).toLocaleTimeString();
+      const bodyHtml = renderHumanReadablePayload(m.payload);
+
+      return `
+        <article class="readable-msg-card">
+          <div class="readable-msg-head">
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+              <span class="tag tag-consumer" onclick="openConsumerModal('${escapeHtml(m.consumerName)}')">👤 ${escapeHtml(m.consumerName || 'Consumer')} ↗</span>
+              <span class="tag tag-queue">📦 [${escapeHtml(m.queue)}]</span>
+              <span class="tag tag-key">🏷️ ${escapeHtml(m.routingKey)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="msg-time">🕒 ${time}</span>
+              <code style="font-size:0.7rem; color:var(--text-faint);">#${escapeHtml(m.id || m.messageId || '')}</code>
+            </div>
+          </div>
+          ${bodyHtml}
+        </article>
+      `;
     }
 
     // Render Messages Feed
@@ -755,32 +1161,90 @@
       if (!messages.length) {
         container.innerHTML = `
           <div class="empty-state" id="empty-feed">
-            Waiting for messages... When your consumers receive messages from the broker, they will appear here in real time!
+            Waiting for messages... When your consumers receive messages from the broker, they will appear here in human-readable format!
           </div>`;
         return;
       }
 
-      container.innerHTML = messages.map(m => {
-        const time = new Date(m.receivedAt || m.timestamp).toLocaleTimeString();
-        const payloadFormatted = typeof m.payload === 'object' && m.payload !== null
-          ? JSON.stringify(m.payload, null, 2)
-          : String(m.payload);
+      container.innerHTML = messages.map(renderMessageCard).join('');
+    }
 
-        return `
-          <div class="msg-card">
-            <div class="msg-top">
-              <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-                <span class="tag tag-consumer">👤 ${escapeHtml(m.consumerName || 'Consumer')}</span>
-                <span class="tag tag-queue">📦 [${escapeHtml(m.queue)}]</span>
-                <span class="tag tag-key">🏷️ ${escapeHtml(m.routingKey)}</span>
-              </div>
-              <span class="msg-time">${time}</span>
-            </div>
-            <div class="msg-body">${escapeHtml(payloadFormatted)}</div>
+    // ═════════════════════════ Consumer Modal Logic ═════════════════════════
+
+    async function openConsumerModal(consumerName) {
+      if (!consumerName) return;
+      activeModalConsumer = consumerName;
+
+      $('modal-consumer-name').textContent = consumerName;
+      $('modal-search').value = '';
+
+      const target = consumers.find(c => c.name === consumerName);
+      $('modal-consumer-meta').textContent = target ? `Queue: ${target.queue} ← [${target.bindingKeys.join(', ')}]` : `Consumer history`;
+
+      $('consumer-modal').style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+
+      await reloadModalDeliveries();
+    }
+
+    async function reloadModalDeliveries() {
+      if (!activeModalConsumer) return;
+      $('modal-messages-list').innerHTML = '<div class="empty-state">Loading messages...</div>';
+
+      try {
+        const res = await fetch(`/api/deliveries?consumer=${encodeURIComponent(activeModalConsumer)}&limit=100`);
+        const data = await res.json();
+        const list = data.items || [];
+        renderModalMessages(list);
+      } catch (err) {
+        // Fallback to locally collected messages
+        const local = messages.filter(m => m.consumerName === activeModalConsumer);
+        renderModalMessages(local);
+      }
+    }
+
+    function renderModalMessages(list) {
+      const query = ($('modal-search').value || '').trim().toLowerCase();
+      let filtered = list || [];
+
+      if (query) {
+        filtered = filtered.filter(m => {
+          const matchKey = (m.routingKey || '').toLowerCase().includes(query);
+          const matchQueue = (m.queue || '').toLowerCase().includes(query);
+          const matchPayload = JSON.stringify(m.payload || '').toLowerCase().includes(query);
+          return matchKey || matchQueue || matchPayload;
+        });
+      }
+
+      $('modal-count').textContent = filtered.length;
+
+      if (!filtered.length) {
+        $('modal-messages-list').innerHTML = `
+          <div class="empty-state">
+            ${query ? `No messages found matching "${escapeHtml(query)}"` : `No messages routed to consumer "${escapeHtml(activeModalConsumer)}" yet.`}
           </div>
         `;
-      }).join('');
+        return;
+      }
+
+      $('modal-messages-list').innerHTML = filtered.map(renderMessageCard).join('');
     }
+
+    function closeConsumerModal() {
+      $('consumer-modal').style.display = 'none';
+      document.body.style.overflow = '';
+      activeModalConsumer = null;
+    }
+
+    $('modal-btn-close').addEventListener('click', closeConsumerModal);
+    $('consumer-modal').addEventListener('click', (ev) => {
+      if (ev.target === $('consumer-modal')) closeConsumerModal();
+    });
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && $('consumer-modal').style.display !== 'none') closeConsumerModal();
+    });
+    $('modal-btn-refresh').addEventListener('click', reloadModalDeliveries);
+    $('modal-search').addEventListener('input', reloadModalDeliveries);
 
     function escapeHtml(str) {
       if (str == null) return '';
@@ -819,6 +1283,10 @@
           if (target) target.receivedCount = data.consumer.receivedCount;
           renderConsumers();
           renderMessages();
+
+          if (activeModalConsumer && activeModalConsumer === data.item.consumerName) {
+            reloadModalDeliveries();
+          }
         } else if (data.type === 'messages_cleared') {
           messages = [];
           renderMessages();

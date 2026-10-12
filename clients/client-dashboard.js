@@ -302,6 +302,29 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, health);
   }
 
+  // Get Deliveries for Consumers (from broker SQLite or local memory fallback)
+  if (req.method === 'GET' && pathname === '/api/deliveries') {
+    const consumer = url.searchParams.get('consumer') || 'all';
+    try {
+      const brokerRes = await fetch(`${brokerUrl}/api/deliveries?${url.searchParams.toString()}`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (brokerRes.ok) {
+        const data = await brokerRes.json();
+        return sendJson(res, 200, data);
+      }
+    } catch {}
+
+    let items = receivedMessages;
+    if (consumer && consumer !== 'all') {
+      items = items.filter((m) => m.consumerName === consumer || m.consumerId === consumer);
+    }
+    return sendJson(res, 200, {
+      items,
+      knownConsumers: [...new Set(receivedMessages.map((m) => m.consumerName))],
+    });
+  }
+
   // Publish Message API
   if (req.method === 'POST' && pathname === '/api/publish') {
     let body = '';

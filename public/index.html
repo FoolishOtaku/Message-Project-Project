@@ -157,6 +157,40 @@
     Producers and consumers connect over <code>tcp://localhost:4000</code>. Run <code>npm run demo</code> for a sample workload.
   </footer>
 
+  <!-- Consumer Messages Popout Modal -->
+  <div class="modal-backdrop" id="consumer-modal" aria-hidden="true" style="display:none;">
+    <div class="modal-dialog glass" role="dialog" aria-modal="true" aria-labelledby="modal-consumer-name">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon">👤</div>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h3 class="modal-consumer-name" id="modal-consumer-name">Consumer Name</h3>
+              <span class="modal-status-badge" id="modal-consumer-status">Active</span>
+            </div>
+            <p class="modal-consumer-meta" id="modal-consumer-meta">Listening on queue: ...</p>
+          </div>
+        </div>
+        <div class="modal-header-actions">
+          <div class="modal-search-wrap">
+            <input type="text" id="modal-search" placeholder="Search in messages..." spellcheck="false" />
+          </div>
+          <button type="button" class="btn-ghost" id="modal-btn-refresh" title="Refresh messages">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+          <button type="button" class="modal-close-btn" id="modal-btn-close" aria-label="Close modal">✕</button>
+        </div>
+      </div>
+      <div class="modal-summary-bar">
+        <span>Showing <strong id="modal-count">0</strong> messages routed to this consumer</span>
+        <span style="font-size:0.72rem; color:var(--text-faint);">Stored persistently in SQLite</span>
+      </div>
+      <div class="modal-body" id="modal-messages-list">
+        <div class="deliveries-empty">Loading messages...</div>
+      </div>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

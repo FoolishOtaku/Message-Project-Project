@@ -44,6 +44,17 @@ const els = {
   filterQueue: $('filter-queue'),
   filterSearch: $('filter-search'),
   btnRefreshDeliveries: $('btn-refresh-deliveries'),
+  modal: {
+    backdrop: $('consumer-modal'),
+    name: $('modal-consumer-name'),
+    status: $('modal-consumer-status'),
+    meta: $('modal-consumer-meta'),
+    search: $('modal-search'),
+    btnRefresh: $('modal-btn-refresh'),
+    btnClose: $('modal-btn-close'),
+    count: $('modal-count'),
+    list: $('modal-messages-list'),
+  },
 };
 
 const ICON = {
@@ -162,21 +173,33 @@ function renderClients() {
     emptyBox('No producers yet.<br>Run <code>npm run producer</code>')
   );
 
+  const liveConsumers = all.filter((c) => c.role === 'consumer');
+  const pastConsumersEmpty = knownConsumersList.length > 0
+    ? `<div class="empty">No live consumers connected.<br><span style="display:block;margin:6px 0 4px;font-size:0.75rem;color:var(--text-dim);font-weight:600;">PAST CONSUMERS IN DB (CLICK TO INSPECT):</span><div style="display:flex;flex-wrap:wrap;gap:6px;">${knownConsumersList.map(name => `<button type="button" class="node-click-pill" style="cursor:pointer;" onclick="openConsumerModal('${esc(name)}')">👤 ${esc(name)} ↗</button>`).join('')}</div></div>`
+    : emptyBox('No consumers yet.<br>Run <code>npm run consumer -- billing order.created</code>');
+
   reconcile(
     els.consumers,
-    all.filter((c) => c.role === 'consumer'),
+    liveConsumers,
     (c) => `client:${c.id}`,
     (c) => ({
-      className: 'node node-consumer',
+      className: 'node node-consumer node-clickable',
+      attrs: {
+        'data-consumer-name': c.name,
+        title: `Click to inspect messages routed to ${c.name}`,
+      },
       html: `
         <div class="node-icon">${ICON.consumer}</div>
         <div class="node-body">
           <div class="node-name">${esc(c.name)}</div>
           <div class="node-meta">from <b>${c.queues.length ? c.queues.map(esc).join(', ') : '…'}</b></div>
         </div>
-        <div class="node-count" title="Messages received">${state.received.get(c.id) ?? 0}</div>`,
+        <div class="node-right">
+          <div class="node-count" title="Messages received">${state.received.get(c.id) ?? 0}</div>
+          <span class="node-click-pill">Inspect ↗</span>
+        </div>`,
     }),
-    emptyBox('No consumers yet.<br>Run <code>npm run consumer -- billing order.created</code>')
+    pastConsumersEmpty
   );
 }
 
@@ -610,33 +633,283 @@ function renderDeliveries() {
     els.deliveriesGrid.innerHTML = '<div class="deliveries-empty">No consumer deliveries recorded matching the current filters.</div>';
     return;
   }
+  els.deliveriesGrid.innerHTML = deliveriesData.map(renderMessageCard).join('');
+}
 
-  els.deliveriesGrid.innerHTML = deliveriesData.map((item) => {
-    const date = new Date(item.deliveredAt);
-    const timeStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
-    const payloadStr = item.payload != null
-      ? (typeof item.payload === 'object' ? JSON.stringify(item.payload, null, 2) : String(item.payload))
-      : '(no payload)';
+// ═════════════════════════ Human-Readable Payload Formatter ═════════════════════════
 
+function formatKeyLabel(key) {
+  const specialMap = {
+    orderid: 'Order ID',
+    customerid: 'Customer ID',
+    userid: 'User ID',
+    productid: 'Product ID',
+    id: 'ID',
+    qris: 'QRIS',
+    url: 'URL',
+    api: 'API',
+    registeredat: 'Registered At',
+    createdat: 'Created At',
+    updatedat: 'Updated At',
+  };
+  const lower = String(key).toLowerCase();
+  if (specialMap[lower]) return specialMap[lower];
+
+  return String(key)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim();
+}
+
+function formatValue(key, val) {
+  if (val === null || val === undefined) {
+    return '<span class="val-null" style="color:var(--text-faint);">—</span>';
+  }
+
+  const keyLower = String(key).toLowerCase();
+
+  // Boolean
+  if (typeof val === 'boolean') {
+    return val
+      ? '<span class="status-badge status-ok">✔ Yes (Confirmed)</span>'
+      : '<span class="status-badge status-no">✖ No (False)</span>';
+  }
+
+  // Number
+  if (typeof val === 'number') {
+    if (keyLower.includes('total') || keyLower.includes('amount') || keyLower.includes('price') || keyLower.includes('fee')) {
+      return `<span class="val-currency">💰 Rp ${val.toLocaleString()}</span>`;
+    }
+    if (keyLower.includes('id')) {
+      return `<code class="val-id">#${val}</code>`;
+    }
+    return `<span class="val-number">${val.toLocaleString()}</span>`;
+  }
+
+  // Array
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '<span style="color:var(--text-faint);">(empty list)</span>';
+    if (val.every((x) => typeof x !== 'object')) {
+      return `
+        <div class="pill-list">
+          ${val.map((item) => `<span class="pill-item">${esc(String(item))}</span>`).join('')}
+        </div>
+      `;
+    }
+    return renderHumanReadablePayload(val);
+  }
+
+  // Object
+  if (typeof val === 'object') {
+    return renderHumanReadablePayload(val);
+  }
+
+  // String
+  const str = String(val);
+
+  // Email
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
+    return `<a href="mailto:${esc(str)}" class="val-email">✉️ ${esc(str)}</a>`;
+  }
+
+  // ISO Date / Timestamp string
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      return `<span class="val-date">📅 ${d.toLocaleDateString()} ${d.toLocaleTimeString()}</span>`;
+    }
+  }
+
+  // Payment methods or specific status keywords
+  if (keyLower.includes('method') || keyLower.includes('status')) {
+    return `<span class="status-badge status-info">${esc(str.toUpperCase())}</span>`;
+  }
+
+  return `<span class="val-string">${esc(str)}</span>`;
+}
+
+function renderHumanReadablePayload(payload) {
+  if (payload == null) {
+    return '<div class="readable-empty">No payload data</div>';
+  }
+
+  let data = payload;
+  if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      return `<div class="readable-text-box">💬 ${esc(data)}</div>`;
+    }
+  }
+
+  if (typeof data !== 'object') {
+    return `<div class="readable-text-box">${formatValue('Value', data)}</div>`;
+  }
+
+  if (Array.isArray(data)) {
+    if (data.length === 0) return '<div class="readable-empty">Empty list [ ]</div>';
     return `
-      <article class="delivery-card">
-        <div class="delivery-card-top">
-          <span class="delivery-consumer">👤 ${esc(item.consumerName)}</span>
-          <time class="delivery-time" datetime="${date.toISOString()}">${timeStr}</time>
-        </div>
-        <div class="delivery-card-tags">
-          <span class="key-chip" style="--key-color:${colorFor(item.routingKey)}">🏷️ ${esc(item.routingKey)}</span>
-          <span class="key-chip" style="--key-color:var(--teal)">📦 queue: ${esc(item.queue)}</span>
-        </div>
-        <pre class="delivery-payload-box">${esc(payloadStr)}</pre>
-        <div class="delivery-card-foot">
-          <span>msg: <code>${esc(item.messageId)}</code></span>
-          <span>pub by: <b>${esc(item.publishedBy || 'client')}</b></span>
-        </div>
-      </article>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${data.map((item, idx) => `
+          <div style="display:flex; align-items:flex-start; gap:8px;">
+            <span style="font-family:var(--font-mono); font-size:0.75rem; color:var(--text-dim);">#${idx + 1}</span>
+            <div style="flex:1;">${renderHumanReadablePayload(item)}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  const entries = Object.entries(data);
+  if (entries.length === 0) {
+    return '<div class="readable-empty">Empty object { }</div>';
+  }
+
+  const rowsHtml = entries.map(([k, v]) => {
+    return `
+      <div class="attr-row">
+        <div class="attr-label">${esc(formatKeyLabel(k))}</div>
+        <div class="attr-value">${formatValue(k, v)}</div>
+      </div>
     `;
   }).join('');
+
+  const rawJson = JSON.stringify(data, null, 2);
+
+  return `
+    <div class="readable-card-body">
+      <div class="attr-table">
+        ${rowsHtml}
+      </div>
+      <details class="raw-json-details">
+        <summary class="raw-json-summary">🔍 View Raw JSON</summary>
+        <pre class="raw-json-box"><code>${esc(rawJson)}</code></pre>
+      </details>
+    </div>
+  `;
 }
+
+function formatRelativeTime(ts) {
+  if (!ts) return '';
+  const diffSec = Math.floor((Date.now() - Number(ts)) / 1000);
+  if (diffSec < 5) return 'just now';
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${Math.floor(diffHr / 24)}d ago`;
+}
+
+function renderMessageCard(item) {
+  const date = new Date(item.deliveredAt || item.publishedAt || Date.now());
+  const timeStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+  const relTime = formatRelativeTime(item.deliveredAt || item.publishedAt);
+  const bodyHtml = renderHumanReadablePayload(item.payload);
+
+  return `
+    <article class="readable-msg-card">
+      <div class="readable-msg-head">
+        <div class="readable-msg-tags">
+          <span class="delivery-consumer" style="cursor:pointer;" onclick="openConsumerModal('${esc(item.consumerName)}')" title="Click to pop out consumer messages">
+            👤 <strong>${esc(item.consumerName)}</strong> ↗
+          </span>
+          <span class="key-chip" style="--key-color:${colorFor(item.routingKey)}">🏷️ ${esc(item.routingKey)}</span>
+          <span class="key-chip" style="--key-color:var(--teal)">📦 ${esc(item.queue)}</span>
+        </div>
+        <div class="readable-msg-meta">
+          <time datetime="${date.toISOString()}" title="${date.toISOString()}">🕒 ${relTime} (${timeStr})</time>
+          <span>msg: <code>#${esc(item.messageId || item.id)}</code></span>
+          <span>pub by: <b>${esc(item.publishedBy || 'broker')}</b></span>
+        </div>
+      </div>
+      ${bodyHtml}
+    </article>
+  `;
+}
+
+// ═════════════════════════ Consumer Popout Modal Logic ═════════════════════════
+
+let activeModalConsumer = null;
+let modalDeliveries = [];
+
+async function openConsumerModal(consumerName) {
+  if (!consumerName) return;
+  activeModalConsumer = consumerName;
+
+  els.modal.name.textContent = consumerName;
+  els.modal.search.value = '';
+
+  const liveClient = [...state.clients.values()].find((c) => c.name === consumerName);
+  if (liveClient) {
+    els.modal.status.textContent = 'Active (Connected)';
+    els.modal.status.className = 'modal-status-badge';
+    els.modal.meta.textContent = `Listening on queue: ${liveClient.queues.join(', ') || 'none'}`;
+  } else {
+    els.modal.status.textContent = 'Database History';
+    els.modal.status.className = 'modal-status-badge offline';
+    els.modal.meta.textContent = 'Stored persistently in SQLite database';
+  }
+
+  els.modal.backdrop.style.display = 'flex';
+  els.modal.backdrop.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+
+  await reloadModalDeliveries();
+}
+
+async function reloadModalDeliveries() {
+  if (!activeModalConsumer) return;
+  els.modal.list.innerHTML = '<div class="deliveries-empty">Loading messages from SQLite database...</div>';
+
+  try {
+    const res = await fetch(`/api/deliveries?consumer=${encodeURIComponent(activeModalConsumer)}&limit=100`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    modalDeliveries = data.items || [];
+    renderModalMessages();
+  } catch (err) {
+    els.modal.list.innerHTML = `<div class="deliveries-empty">Failed to load consumer messages: ${esc(err.message)}</div>`;
+  }
+}
+
+function renderModalMessages() {
+  const query = (els.modal.search.value || '').trim().toLowerCase();
+  let filtered = modalDeliveries;
+
+  if (query) {
+    filtered = filtered.filter((m) => {
+      const matchKey = (m.routingKey || '').toLowerCase().includes(query);
+      const matchQueue = (m.queue || '').toLowerCase().includes(query);
+      const matchId = String(m.messageId || m.id || '').toLowerCase().includes(query);
+      const matchPayload = JSON.stringify(m.payload || '').toLowerCase().includes(query);
+      return matchKey || matchQueue || matchId || matchPayload;
+    });
+  }
+
+  els.modal.count.textContent = filtered.length;
+
+  if (!filtered.length) {
+    els.modal.list.innerHTML = `
+      <div class="deliveries-empty">
+        ${query ? `No messages found matching "${esc(query)}"` : `No messages have been routed to consumer "${esc(activeModalConsumer)}" yet.`}
+      </div>
+    `;
+    return;
+  }
+
+  els.modal.list.innerHTML = filtered.map(renderMessageCard).join('');
+}
+
+function closeConsumerModal() {
+  els.modal.backdrop.style.display = 'none';
+  els.modal.backdrop.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+  activeModalConsumer = null;
+}
+
+// ═════════════════════════ Event Handling ═════════════════════════
 
 function onLiveDelivery(e) {
   const item = {
@@ -655,7 +928,13 @@ function onLiveDelivery(e) {
     updateConsumerDropdown();
   }
 
-  // Prepend to visible list if matches current filters
+  // If consumer modal is currently open for this consumer, update live!
+  if (activeModalConsumer && activeModalConsumer === item.consumerName) {
+    modalDeliveries.unshift(item);
+    renderModalMessages();
+  }
+
+  // Prepend to visible deliveries list if matches current filters
   const currentConsumer = els.filterConsumer.value;
   const currentQueue = els.filterQueue.value;
   const matchesConsumer = currentConsumer === 'all' || currentConsumer === item.consumerName;
@@ -667,6 +946,39 @@ function onLiveDelivery(e) {
     renderDeliveries();
   }
 }
+
+// Click on consumer card in column 4 opens modal
+els.consumers.addEventListener('click', (ev) => {
+  const card = ev.target.closest('[data-consumer-name]');
+  if (card && card.dataset.consumerName) {
+    openConsumerModal(card.dataset.consumerName);
+  }
+});
+
+// Modal close button
+els.modal.btnClose.addEventListener('click', closeConsumerModal);
+
+// Close on clicking backdrop outside modal dialog
+els.modal.backdrop.addEventListener('click', (ev) => {
+  if (ev.target === els.modal.backdrop) {
+    closeConsumerModal();
+  }
+});
+
+// Close on Escape key
+window.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && els.modal.backdrop.style.display !== 'none') {
+    closeConsumerModal();
+  }
+});
+
+// Refresh button inside modal
+els.modal.btnRefresh.addEventListener('click', reloadModalDeliveries);
+
+// Live search inside modal
+els.modal.search.addEventListener('input', () => {
+  renderModalMessages();
+});
 
 // Filter listeners
 els.filterConsumer.addEventListener('change', loadDeliveries);
