@@ -112,30 +112,36 @@ docker compose up -d --build
 
 The container `kurir-broker` will:
 - Attach to the shared `tunnel_net` network (resolvable via Docker DNS by your `cloudflared` container)
-- Expose TCP port `4000:4000` to the NixOS host for producers and consumers
+- Expose HTTP dashboard and API on port `8080` (routed via Cloudflare Tunnel)
+- Expose TCP port `4000:4000` on the NixOS host for local producers and consumers
+- Persist messages and consumer history in `./data/kurir.db`
 
-### 2. Add Route in Cloudflare Zero Trust
+### 2. Updating the Deployed Broker on NixOS
 
-In the Cloudflare Zero Trust Dashboard:
-1. Go to **Networks** → **Tunnels** → select your active tunnel.
-2. Under **Public Hostname**, click **Add a public hostname**.
-3. Fill in:
-   - **Subdomain / Domain**: e.g., `kurir.aselaboratory.com` (or your preferred subdomain)
-   - **Type**: `HTTP`
-   - **URL**: `kurir-broker:8080`
-4. Click **Save hostname**.
-
-You can now open `https://kurir.aselaboratory.com` in your browser from anywhere to see the live dashboard!
-
-### 3. Connect TCP Clients on the Server
+Whenever you push code updates to Git, update the running container on your server:
 
 ```bash
-# Run demo workload on the server:
-node clients/demo.js
-
-# Or connect consumer to the broker:
-node clients/consumer.js billing order.created --name worker-1
+git pull
+docker compose up -d --build
 ```
+
+This automatically rebuilds the image with the new features (such as the `/api/consumer/stream` HTTP endpoint and SQLite persistence) and performs a rolling restart without needing `compose down`.
+
+### 3. Connecting Clients to the Remote Deployed Broker
+
+Since Cloudflare Tunnel proxies HTTP/HTTPS traffic (e.g. `https://brokerkurir.aselaboratory.com`):
+
+- **Visual Client Studio (`http://localhost:3000`)**:
+  Open the studio, select **🌐 Deployed NixOS** (`https://brokerkurir.aselaboratory.com`), and click **Connect**. You can publish messages, spawn consumers, and watch incoming processed data in real time!
+- **CLI over HTTPS**:
+  ```bash
+  # Remote consumer:
+  BROKER_URL=https://brokerkurir.aselaboratory.com node clients/consumer.js billing order.created --name worker-1
+
+  # Remote producer:
+  BROKER_URL=https://brokerkurir.aselaboratory.com node clients/producer.js order.created '{"orderId": 42}'
+  ```
+
 
 ## Configuration
 

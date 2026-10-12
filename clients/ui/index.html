@@ -80,6 +80,82 @@
       border: 1px solid var(--border);
     }
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); }
+    .dot-err { background: var(--rose) !important; }
+    .dot-warn { background: var(--amber) !important; }
+
+    /* Broker Connection Bar */
+    .broker-bar {
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 32px;
+    }
+    .broker-bar-inner {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .broker-bar-field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .broker-bar-field label {
+      margin-bottom: 0;
+      white-space: nowrap;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .input-with-button {
+      display: flex;
+      gap: 6px;
+    }
+    .input-with-button input {
+      min-width: 320px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      font-family: var(--font-mono);
+    }
+    .quick-links {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .quick-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.74rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .quick-btn:hover {
+      background: var(--violet-bg);
+      border-color: var(--violet);
+      color: #fff;
+    }
+
+    /* Warning Banner */
+    .broker-warning-banner {
+      background: rgba(245, 158, 11, 0.12);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.25);
+      color: #fbbf24;
+      padding: 10px 32px;
+      font-size: 0.84rem;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .broker-warning-banner code {
+      background: rgba(0, 0, 0, 0.35);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      color: #fef08a;
+    }
 
     main {
       flex: 1;
@@ -194,6 +270,7 @@
       border-radius: 6px;
       font-size: 0.8rem;
       cursor: pointer;
+      white-space: nowrap;
     }
     .btn-secondary:hover { background: rgba(255, 255, 255, 0.08); }
 
@@ -265,7 +342,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      max-height: calc(100vh - 160px);
+      max-height: calc(100vh - 200px);
       overflow-y: auto;
       padding-right: 4px;
     }
@@ -335,6 +412,7 @@
 
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; }
+      .input-with-button input { min-width: 220px; }
     }
   </style>
 </head>
@@ -344,17 +422,35 @@
       <div class="brand-logo">K</div>
       <div>
         <h1>Kurir Client Studio</h1>
-        <p>Visual Producer & Consumer Interface (No Terminal Required!)</p>
+        <p>Visual Producer & Consumer Interface</p>
       </div>
     </div>
     <div class="header-actions">
       <button class="btn-secondary" id="btn-toggle-sim">▶ Start Auto Traffic</button>
-      <div class="badge">
-        <span class="dot"></span>
-        <span id="broker-status">Broker: tcp://127.0.0.1:4000</span>
-      </div>
     </div>
   </header>
+
+  <div class="broker-bar">
+    <div class="broker-bar-inner">
+      <div class="broker-bar-field">
+        <label for="input-broker-url">Target Broker:</label>
+        <div class="input-with-button">
+          <input type="text" id="input-broker-url" value="https://brokerkurir.aselaboratory.com" spellcheck="false" placeholder="https://brokerkurir.aselaboratory.com">
+          <button type="button" class="btn-secondary" id="btn-save-broker">Connect</button>
+        </div>
+      </div>
+      <div class="quick-links">
+        <button type="button" class="quick-btn" data-url="https://brokerkurir.aselaboratory.com">🌐 Deployed NixOS</button>
+        <button type="button" class="quick-btn" data-url="http://localhost:8080">💻 Local Broker</button>
+      </div>
+      <div class="badge" id="broker-status-badge">
+        <span class="dot" id="broker-status-dot"></span>
+        <span id="broker-status-text">Checking connection...</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="broker-warning-banner" class="broker-warning-banner" style="display:none;"></div>
 
   <main>
     <!-- Left Column: Producer & Consumer Controls -->
@@ -442,6 +538,66 @@
     let messages = [];
     let simulatorRunning = false;
 
+    const inputBrokerUrl = $('input-broker-url');
+    const btnSaveBroker = $('btn-save-broker');
+    const brokerStatusDot = $('broker-status-dot');
+    const brokerStatusText = $('broker-status-text');
+    const brokerWarningBanner = $('broker-warning-banner');
+
+    function updateBrokerHealthUI(health, url) {
+      if (url) inputBrokerUrl.value = url;
+      if (!health || !health.ok) {
+        brokerStatusDot.className = 'dot dot-err';
+        brokerStatusText.textContent = `Offline: ${health ? (health.error || 'Cannot reach broker') : 'Unknown'}`;
+        brokerWarningBanner.style.display = 'none';
+      } else if (!health.streamSupported) {
+        brokerStatusDot.className = 'dot dot-warn';
+        brokerStatusText.textContent = `Connected (${url}) - Consumer stream requires NixOS container update`;
+        brokerWarningBanner.style.display = 'flex';
+        brokerWarningBanner.innerHTML = `
+          <div>
+            <strong>⚠️ Deployed NixOS Notice:</strong> Broker at <code>${escapeHtml(url)}</code> is active and accepting publishes, but the container was built before the HTTP consumer stream endpoint was added. Run <code>git pull && docker compose up -d --build</code> on your NixOS server to enable live consumers over HTTPS!
+          </div>
+        `;
+      } else {
+        brokerStatusDot.className = 'dot';
+        brokerStatusText.textContent = `Connected: ${url} (Ready)`;
+        brokerWarningBanner.style.display = 'none';
+      }
+    }
+
+    async function saveBrokerUrl(url) {
+      if (!url) return;
+      btnSaveBroker.disabled = true;
+      btnSaveBroker.textContent = 'Connecting...';
+      try {
+        const res = await fetch('/api/config/broker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          updateBrokerHealthUI(data.health, data.brokerUrl);
+        } else {
+          alert('Failed to connect: ' + data.error);
+        }
+      } catch (err) {
+        alert('Connection error: ' + err.message);
+      } finally {
+        btnSaveBroker.disabled = false;
+        btnSaveBroker.textContent = 'Connect';
+      }
+    }
+
+    btnSaveBroker.addEventListener('click', () => saveBrokerUrl(inputBrokerUrl.value.trim()));
+    document.querySelectorAll('.quick-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        inputBrokerUrl.value = btn.dataset.url;
+        saveBrokerUrl(btn.dataset.url);
+      });
+    });
+
     // Presets
     document.querySelectorAll('.preset-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -505,6 +661,10 @@
       const keysStr = $('input-consumer-keys').value.trim();
       const bindingKeys = keysStr.split(',').map(s => s.trim()).filter(Boolean);
 
+      const btn = $('btn-start-consumer');
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+
       try {
         const res = await fetch('/api/consumer/start', {
           method: 'POST',
@@ -515,10 +675,13 @@
         if (data.success) {
           $('input-consumer-name').value = '';
         } else {
-          alert('Error: ' + data.error);
+          alert('Error connecting consumer:\n' + data.error);
         }
       } catch (err) {
-        alert('Failed to connect consumer: ' + err.message);
+        alert('Failed to connect consumer:\n' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '+ Connect Consumer';
       }
     });
 
@@ -640,6 +803,9 @@
           setSimulatorState(data.simulatorRunning);
           renderConsumers();
           renderMessages();
+          updateBrokerHealthUI(data.brokerHealth, data.brokerUrl);
+        } else if (data.type === 'broker_config_changed') {
+          updateBrokerHealthUI(data.health, data.brokerUrl);
         } else if (data.type === 'consumer_started') {
           consumers.push(data.consumer);
           renderConsumers();

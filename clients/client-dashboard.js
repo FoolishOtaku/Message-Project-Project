@@ -1,112 +1,182 @@
 #!/usr/bin/env node
 /**
  * Local Interactive Client Dashboard Server.
- * Runs on http://localhost:3000 (no terminal typing required!).
+ * Runs on http://localhost:3000.
  *
- * Features:
- *   1. Producer Studio: Preset buttons + custom message publisher
- *   2. Consumer Studio: Spawn and stop multiple live TCP consumers visually
- *   3. Live Inbox: See messages processed by your consumers in real-time
- *   4. Auto-Traffic Simulator: One-click background traffic generator
+ * Can connect to:
+ *   - Remote Deployed Broker via HTTPS: https://brokerkurir.aselaboratory.com
+ *   - Local Broker via HTTP:            http://localhost:8080
  */
 
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
-const { connect } = require('./client');
 
 const CLIENT_PORT = Number(process.env.CLIENT_PORT) || 3000;
-const BROKER_HOST = process.env.BROKER_HOST || '127.0.0.1';
-const BROKER_PORT = Number(process.env.BROKER_PORT) || 4000;
+let brokerUrl = (process.env.BROKER_URL || 'https://brokerkurir.aselaboratory.com').replace(/\/+$/, '');
 const UI_DIR = path.join(__dirname, 'ui');
 
-// Ensure UI dir exists
 if (!fs.existsSync(UI_DIR)) {
   fs.mkdirSync(UI_DIR, { recursive: true });
 }
 
 // ───────────────────────── State ─────────────────────────
 
-let publisherClient = null;
-const activeConsumers = new Map(); // consumerId -> { client, name, queue, keys, receivedCount, connectedAt }
-const receivedMessages = []; // array of last 100 received messages
+const activeConsumers = new Map(); // consumerId -> { id, name, queue, bindingKeys, receivedCount, connectedAt, abortController }
+const receivedMessages = []; // last 100 received messages
 const sseClients = new Set();
 let simulatorTimer = null;
 let simulatorRunning = false;
 
-// ───────────────────────── TCP Client Logic ─────────────────────────
+// ───────────────────────── Remote Broker Operations ─────────────────────────
 
-async function getPublisher() {
-  if (publisherClient) return publisherClient;
-  publisherClient = await connect({
-    host: BROKER_HOST,
-    port: BROKER_PORT,
-    name: 'web-client-publisher',
-    role: 'producer',
-  });
-  publisherClient.on('close', () => {
-    publisherClient = null;
-    broadcast({ type: 'status', message: 'Publisher disconnected from broker' });
-  });
-  return publisherClient;
+async function checkBrokerHealth(targetUrl = brokerUrl) {
+  try {
+    const res = await fetch(`${targetUrl}/api/state`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    let streamSupported = false;
+    try {
+      const pingAbort = new AbortController();
+      const timeout = setTimeout(() => pingAbort.abort(), 2000);
+      const streamRes = await fetch(`${targetUrl}/api/consumer/stream?name=__ping__&queue=__ping__&keys=ping`, {
+        signal: pingAbort.signal,
+      });
+      clearTimeout(timeout);
+      if (streamRes.status === 200) {
+        streamSupported = true;
+      }
+      if (streamRes.body) streamRes.body.cancel().catch(() => {});
+    } catch {
+      // ignore stream check errors
+    }
+
+    return { ok: true, state: data, url: targetUrl, streamSupported };
+  } catch (err) {
+    return { ok: false, error: err.message, url: targetUrl, streamSupported: false };
+  }
 }
 
-async function startConsumer({ name, queue, bindingKeys }) {
+async function publishMessage({ routingKey, payload, publisherName = 'web-client' }) {
+  const res = await fetch(`${brokerUrl}/api/publish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ routingKey, payload, publisherName }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Publish failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
+async function startHttpConsumer({ name, queue, bindingKeys }) {
   const consumerId = `c_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const clientName = name || `consumer-${consumerId}`;
+  const keys = Array.isArray(bindingKeys) ? bindingKeys : [bindingKeys].filter(Boolean);
 
-  const client = await connect({
-    host: BROKER_HOST,
-    port: BROKER_PORT,
-    name: clientName,
-    role: 'consumer',
-  });
+  const abortController = new AbortController();
+  const streamUrl = `${brokerUrl}/api/consumer/stream?name=${encodeURIComponent(clientName)}&queue=${encodeURIComponent(queue)}&keys=${encodeURIComponent(keys.join(','))}`;
+
+  let res;
+  try {
+    res = await fetch(streamUrl, { signal: abortController.signal });
+  } catch (err) {
+    throw new Error(`Cannot connect to broker stream at ${brokerUrl}: ${err.message}`);
+  }
+
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(
+        `Broker at ${brokerUrl} returned HTTP 404 on consumer stream. The deployed container on NixOS has not been updated with the latest code yet. Please run 'git pull && docker compose up -d --build' on your NixOS server.`
+      );
+    }
+    const text = await res.text().catch(() => '');
+    throw new Error(`Broker stream returned HTTP ${res.status}: ${text}`);
+  }
 
   const record = {
     id: consumerId,
     name: clientName,
     queue,
-    bindingKeys: Array.isArray(bindingKeys) ? bindingKeys : [bindingKeys].filter(Boolean),
+    bindingKeys: keys,
     receivedCount: 0,
     connectedAt: Date.now(),
-    client,
+    abortController,
   };
-
-  client.subscribe(record.queue, record.bindingKeys);
-
-  client.on('message', ({ queue: q, message }) => {
-    record.receivedCount++;
-    const item = {
-      id: message.id,
-      consumerId: record.id,
-      consumerName: record.name,
-      queue: q,
-      routingKey: message.routingKey,
-      payload: message.payload,
-      publishedBy: message.publishedBy,
-      timestamp: message.timestamp || Date.now(),
-      receivedAt: Date.now(),
-    };
-    receivedMessages.unshift(item);
-    if (receivedMessages.length > 200) receivedMessages.pop();
-
-    broadcast({ type: 'message_received', item, consumer: publicConsumer(record) });
-  });
-
-  client.on('close', () => {
-    activeConsumers.delete(consumerId);
-    broadcast({ type: 'consumer_stopped', consumerId });
-  });
 
   activeConsumers.set(consumerId, record);
   broadcast({ type: 'consumer_started', consumer: publicConsumer(record) });
+
+  // Read consumer stream loop asynchronously
+  (async () => {
+    try {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+
+        for (const part of parts) {
+          const lines = part.split('\n');
+          let eventType = 'message';
+          let eventData = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+            if (line.startsWith('data: ')) eventData += line.slice(6);
+          }
+
+          if (eventType === 'message' && eventData) {
+            try {
+              const parsed = JSON.parse(eventData);
+              record.receivedCount++;
+              const item = {
+                id: parsed.message?.id || `msg_${Date.now()}`,
+                consumerId: record.id,
+                consumerName: record.name,
+                queue: parsed.queue || record.queue,
+                routingKey: parsed.message?.routingKey || 'unknown',
+                payload: parsed.message?.payload,
+                publishedBy: parsed.message?.publishedBy || 'broker',
+                timestamp: parsed.message?.timestamp || Date.now(),
+                receivedAt: Date.now(),
+              };
+              receivedMessages.unshift(item);
+              if (receivedMessages.length > 200) receivedMessages.pop();
+
+              broadcast({ type: 'message_received', item, consumer: publicConsumer(record) });
+            } catch (parseErr) {
+              console.error('Error parsing consumer message payload:', parseErr);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error(`Consumer ${record.name} stream error:`, err.message);
+        broadcast({ type: 'consumer_error', consumerId, error: err.message });
+      }
+    } finally {
+      activeConsumers.delete(consumerId);
+      broadcast({ type: 'consumer_stopped', consumerId });
+    }
+  })();
+
   return record;
 }
 
 function stopConsumer(consumerId) {
   const record = activeConsumers.get(consumerId);
   if (record) {
-    record.client.close();
+    record.abortController.abort();
     activeConsumers.delete(consumerId);
     broadcast({ type: 'consumer_stopped', consumerId });
     return true;
@@ -125,7 +195,7 @@ function publicConsumer(c) {
   };
 }
 
-// ───────────────────────── Auto Simulator ─────────────────────────
+// ───────────────────────── Auto Traffic Simulator ─────────────────────────
 
 const SAMPLE_EVENTS = [
   { key: 'order.created', payload: () => ({ orderId: Math.floor(1000 + Math.random() * 9000), customer: 'Budi Santoso', total: 150000 + Math.floor(Math.random() * 50) * 10000, items: ['Mechanical Keyboard', 'Desk Mat'] }) },
@@ -143,9 +213,8 @@ function toggleSimulator() {
     simulatorRunning = true;
     simulatorTimer = setInterval(async () => {
       try {
-        const pub = await getPublisher();
         const event = SAMPLE_EVENTS[Math.floor(Math.random() * SAMPLE_EVENTS.length)];
-        pub.publish(event.key, event.payload());
+        await publishMessage({ routingKey: event.key, payload: event.payload(), publisherName: 'auto-traffic-bot' });
       } catch (err) {
         console.error('Simulator publish error:', err.message);
       }
@@ -155,7 +224,7 @@ function toggleSimulator() {
   return simulatorRunning;
 }
 
-// ───────────────────────── HTTP Server & SSE ─────────────────────────
+// ───────────────────────── SSE Broadcast ─────────────────────────
 
 function broadcast(data) {
   const payload = `data: ${JSON.stringify(data)}\n\n`;
@@ -168,11 +237,12 @@ function broadcast(data) {
   }
 }
 
+// ───────────────────────── HTTP Server ─────────────────────────
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const pathname = url.pathname;
 
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -182,7 +252,7 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  // SSE Stream
+  // SSE Stream for Client Studio Frontend
   if (req.method === 'GET' && pathname === '/api/stream') {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -192,10 +262,11 @@ const server = http.createServer(async (req, res) => {
     res.write('retry: 2000\n\n');
     sseClients.add(res);
 
-    // Initial state
+    const health = await checkBrokerHealth();
     const snapshot = {
       type: 'initial_state',
-      brokerConfig: { host: BROKER_HOST, port: BROKER_PORT },
+      brokerUrl,
+      brokerHealth: health,
       simulatorRunning,
       consumers: [...activeConsumers.values()].map(publicConsumer),
       messages: receivedMessages.slice(0, 50),
@@ -206,20 +277,41 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Publish API
+  // Set Target Broker URL
+  if (req.method === 'POST' && pathname === '/api/config/broker') {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', async () => {
+      try {
+        const { url: nextUrl } = JSON.parse(body || '{}');
+        if (!nextUrl) throw new Error('Broker URL is required');
+        brokerUrl = nextUrl.trim().replace(/\/+$/, '');
+        const health = await checkBrokerHealth(brokerUrl);
+        broadcast({ type: 'broker_config_changed', brokerUrl, health });
+        sendJson(res, 200, { success: true, brokerUrl, health });
+      } catch (err) {
+        sendJson(res, 400, { success: false, error: err.message });
+      }
+    });
+    return;
+  }
+
+  // Check Target Broker Health
+  if (req.method === 'GET' && pathname === '/api/config/health') {
+    const health = await checkBrokerHealth();
+    return sendJson(res, 200, health);
+  }
+
+  // Publish Message API
   if (req.method === 'POST' && pathname === '/api/publish') {
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', async () => {
       try {
-        const { routingKey, payload } = JSON.parse(body || '{}');
+        const { routingKey, payload, publisherName } = JSON.parse(body || '{}');
         if (!routingKey) throw new Error('Routing key is required');
-        const pub = await getPublisher();
-
-        pub.once('published', (result) => {
-          sendJson(res, 200, { success: true, ...result });
-        });
-        pub.publish(routingKey, payload);
+        const result = await publishMessage({ routingKey, payload, publisherName });
+        sendJson(res, 200, { success: true, ...result });
       } catch (err) {
         sendJson(res, 400, { success: false, error: err.message });
       }
@@ -235,7 +327,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const { name, queue, bindingKeys } = JSON.parse(body || '{}');
         if (!queue) throw new Error('Queue name is required');
-        const consumer = await startConsumer({ name, queue, bindingKeys });
+        const consumer = await startHttpConsumer({ name, queue, bindingKeys });
         sendJson(res, 200, { success: true, consumer: publicConsumer(consumer) });
       } catch (err) {
         sendJson(res, 400, { success: false, error: err.message });
@@ -273,7 +365,7 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, 200, { success: true });
   }
 
-  // Serve Static Client UI
+  // Serve Client UI
   if (req.method === 'GET') {
     const filePath = pathname === '/' ? path.join(UI_DIR, 'index.html') : path.join(UI_DIR, pathname);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
@@ -297,7 +389,7 @@ server.listen(CLIENT_PORT, () => {
   🚀 Kurir Client Studio Running!
 
   Local Web App:  \x1b[36mhttp://localhost:${CLIENT_PORT}\x1b[0m
-  Target Broker:  \x1b[35mtcp://${BROKER_HOST}:${BROKER_PORT}\x1b[0m
+  Target Broker:  \x1b[35m${brokerUrl}\x1b[0m
 
   Use the dashboard to publish messages, manage consumers, and view received data!
   Press Ctrl+C to stop.

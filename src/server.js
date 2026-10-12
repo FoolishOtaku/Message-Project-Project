@@ -106,14 +106,54 @@ const httpServer = http.createServer((req, res) => {
     return res.end();
   }
 
-  if (req.method === 'GET' && pathname === '/events') return handleEvents(req, res);
-  if (req.method === 'GET' && pathname === '/api/state') return sendJson(res, 200, broker.snapshot());
-  if (req.method === 'GET' && pathname === '/api/deliveries') return handleDeliveries(req, res, url);
+  const isGetOrHead = req.method === 'GET' || req.method === 'HEAD';
+
+  if (isGetOrHead && pathname === '/events') return handleEvents(req, res);
+  if (isGetOrHead && pathname === '/api/state') return sendJson(res, 200, broker.snapshot());
+  if (isGetOrHead && pathname === '/api/deliveries') return handleDeliveries(req, res, url);
+  if (isGetOrHead && pathname === '/api/consumer/stream') return handleConsumerStream(req, res, url);
   if (req.method === 'POST' && pathname === '/api/publish') return handlePublish(req, res);
-  if (req.method === 'GET') return serveStatic(pathname, res);
+  if (isGetOrHead) return serveStatic(pathname, res);
 
   sendJson(res, 405, { error: 'Method not allowed' });
 });
+
+function handleConsumerStream(req, res, url) {
+  const name = url.searchParams.get('name') || `http-consumer-${Date.now().toString(36)}`;
+  const queue = url.searchParams.get('queue');
+  const keysStr = url.searchParams.get('keys') || '';
+  const bindingKeys = keysStr.split(',').map((k) => k.trim()).filter(Boolean);
+
+  if (!queue) {
+    return sendJson(res, 400, { error: 'Query param "queue" is required' });
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+  res.write('retry: 2000\n\n');
+
+  const client = broker.registerClient({
+    name,
+    role: 'consumer',
+    deliver: (message, q) => {
+      writeSse(res, 'message', { queue: q, message });
+    },
+  });
+
+  broker.subscribe(client.id, queue, bindingKeys);
+  writeSse(res, 'subscribed', { clientId: client.id, queue, bindingKeys });
+
+  const keepAlive = setInterval(() => res.write(': ping\n\n'), 15000);
+
+  req.on('close', () => {
+    clearInterval(keepAlive);
+    broker.removeClient(client.id);
+  });
+}
 
 function handleDeliveries(req, res, url) {
   const consumer = url.searchParams.get('consumer') || 'all';
@@ -160,8 +200,20 @@ function handlePublish(req, res) {
   });
   req.on('end', () => {
     try {
-      const { routingKey, payload } = JSON.parse(body || '{}');
-      sendJson(res, 200, broker.publish(dashboardClient.id, routingKey, payload));
+      const { routingKey, payload, publisherName } = JSON.parse(body || '{}');
+      let pub = dashboardClient;
+      if (publisherName && publisherName !== 'dashboard') {
+        pub = broker.registerClient({
+          name: publisherName,
+          role: 'producer',
+          deliver: () => {},
+        });
+      }
+      const result = broker.publish(pub.id, routingKey, payload);
+      if (pub !== dashboardClient) {
+        broker.removeClient(pub.id);
+      }
+      sendJson(res, 200, result);
     } catch (e) {
       sendJson(res, 400, { error: e.message });
     }

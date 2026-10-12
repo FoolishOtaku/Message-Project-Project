@@ -791,22 +791,20 @@ Within one queue, yes: first in, first out (`push` to add at the end, `shift` to
 from the front).
 
 **What happens when the broker restarts?**
-Everything is in memory (JavaScript variables), so all queues, bindings, and waiting
-messages are lost. Clients get disconnected.
+Messages and pending queues are saved persistently in SQLite (`data/kurir.db` via `src/db.js`). When the broker restarts, pending messages in queues and full consumer delivery logs are restored automatically.
 
-**What happens if a consumer crashes while processing a message?**
-The message is lost. The broker considers a message "done" the moment it *sends* it. Real
-brokers solve this with **acknowledgements**.
+**Can remote consumers connect through Cloudflare Tunnel?**
+Yes! Cloudflare Tunnels expose HTTP/HTTPS (`https://brokerkurir.aselaboratory.com`). To support remote clients without complex TCP tunneling, Kurir provides `/api/consumer/stream` (SSE streaming) and `/api/publish` (HTTP POST). Both the Client Studio (`localhost:3000`) and CLI clients (`BROKER_URL=https://... node clients/consumer.js`) can connect over HTTPS.
 
-### Limitations and where you'd change the code to fix them
+### Future improvements and where you'd change the code
 
-| Limitation | Idea for improvement | Where in the code |
+| Improvement | Idea | Where in the code |
 | --- | --- | --- |
-| Messages lost on restart | Save queues to a file, reload on start | `broker.js`: `publish`, `#drain`, constructor |
-| Lost if consumer crashes | **Acks**: keep message as "unacked" until the consumer replies `{"type":"ack","id":…}`; re-queue if it disconnects first | `broker.js` `#drain` + new `ack()`; `server.js` new command |
-| Only exact-match routing | **Topic exchange**: `order.*` matches `order.paid`; `#` matches many words | `broker.js` `publish`: replace the `bindings.get()` lookup with pattern matching |
+| Message acknowledgements | **Acks**: keep message as "unacked" until the consumer replies `ack`; re-queue if it disconnects | `broker.js` `#drain` + new `ack()`; `server.js` |
+| Pattern matching routing | **Topic exchange**: `order.*` matches `order.paid`; `#` matches many words | `broker.js` `publish`: replace `bindings.get()` with pattern matching |
 | Broadcast to everyone | **Fanout exchange**: ignore the key, send to all queues | `broker.js` `publish` |
-| No security | Require a password/token in `hello` | `server.js` `handleCommand` |
+| Authentication | Require a token/API key in headers or `hello` | `server.js` and `protocol.js` |
+
 
 ---
 
