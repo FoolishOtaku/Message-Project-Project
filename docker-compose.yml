@@ -1,0 +1,26 @@
+services:
+  broker:
+    build: .
+    image: kurir-broker:latest
+    container_name: kurir-broker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      BROKER_PORT: 4000
+      DASHBOARD_PORT: 8080
+      HOST: 0.0.0.0
+    ports:
+      # Expose TCP broker port to NixOS host so producers and consumers can connect
+      - "4000:4000"
+      # Optional: uncomment to also access the dashboard locally on NixOS via http://127.0.0.1:8080
+      # - "127.0.0.1:8080:8080"
+    networks:
+      - tunnel_net
+
+# Reuses the existing cloudflared container from ~/projects/cloudflare via the shared external "tunnel_net" network.
+# In Cloudflare Zero Trust -> Networks -> Tunnels -> (your tunnel) -> Public Hostname:
+#   Service Type : HTTP
+#   URL          : kurir-broker:8080
+networks:
+  tunnel_net:
+    external: true

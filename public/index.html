@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kurir: Live Message Broker Dashboard</title>
+  <meta name="description" content="Watch messages flow from producers through a direct exchange into queues and out to consumers, live." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%237c5cff'/><path d='M8 16h16M18 10l6 6-6 6' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+</head>
+<body>
+  <div class="bg-orbs" aria-hidden="true"><span></span><span></span><span></span></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><path d="M6 16h20M19 9l7 7-7 7" /></svg>
+      </div>
+      <div>
+        <h1>Kurir</h1>
+        <p>A tiny message broker, built from scratch</p>
+      </div>
+    </div>
+    <div class="connection" id="connection-status" data-state="connecting">
+      <span class="connection-dot"></span>
+      <span id="connection-text">Connecting…</span>
+    </div>
+  </header>
+
+  <section class="stats" aria-label="Broker statistics">
+    <div class="stat"><span class="stat-label">Published</span><span class="stat-value" id="stat-published">0</span></div>
+    <div class="stat"><span class="stat-label">Routed copies</span><span class="stat-value" id="stat-routed">0</span></div>
+    <div class="stat"><span class="stat-label">Delivered</span><span class="stat-value" id="stat-delivered">0</span></div>
+    <div class="stat stat-warn"><span class="stat-label">Unroutable</span><span class="stat-value" id="stat-unroutable">0</span></div>
+    <div class="stat"><span class="stat-label">Waiting in queues</span><span class="stat-value" id="stat-waiting">0</span></div>
+  </section>
+
+  <main class="layout">
+    <section class="stage glass" id="stage" aria-label="Message flow">
+      <div class="col">
+        <h2 class="col-title"><span class="step">1</span> Producers</h2>
+        <div class="list" id="producers"></div>
+      </div>
+
+      <div class="col col-exchange">
+        <h2 class="col-title"><span class="step">2</span> Exchange</h2>
+        <div class="exchange" id="exchange">
+          <div class="exchange-ring"></div>
+          <div class="exchange-core">
+            <span class="exchange-type">DIRECT</span>
+            <span class="exchange-sub">routing key = binding key</span>
+          </div>
+        </div>
+        <div class="routing-table">
+          <div class="routing-head"><span>Routing key</span><span>Queues</span></div>
+          <div id="routing-rows"></div>
+        </div>
+        <div class="dead-letter" id="dead-letter">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
+          <span>Unroutable</span>
+          <span class="dead-count" id="dead-count">0</span>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2 class="col-title"><span class="step">3</span> Queues</h2>
+        <div class="list" id="queues"></div>
+      </div>
+
+      <div class="col">
+        <h2 class="col-title"><span class="step">4</span> Consumers</h2>
+        <div class="list" id="consumers"></div>
+      </div>
+
+      <div class="fx-layer" id="fx-layer" aria-hidden="true"></div>
+    </section>
+
+    <aside class="side">
+      <section class="glass panel" aria-labelledby="publish-title">
+        <h2 id="publish-title" class="panel-title">Publish a message</h2>
+        <form id="publish-form" autocomplete="off">
+          <label class="field">
+            <span>Routing key</span>
+            <input id="routing-key-input" name="routingKey" placeholder="order.created" required spellcheck="false" />
+          </label>
+          <div class="chips" id="key-suggestions"></div>
+          <label class="field">
+            <span>Payload <em>(JSON or plain text)</em></span>
+            <textarea id="payload-input" name="payload" rows="4" spellcheck="false">{"orderId": 42, "total": 150000}</textarea>
+          </label>
+          <button type="submit" class="btn" id="publish-button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-2-7-8-1z" /></svg>
+            Send to broker
+          </button>
+          <p class="feedback" id="publish-feedback" role="status"></p>
+        </form>
+      </section>
+
+      <section class="glass panel log-panel" aria-labelledby="log-title">
+        <div class="panel-head">
+          <h2 id="log-title" class="panel-title">Event log</h2>
+          <button type="button" class="btn-ghost" id="clear-log-button">Clear</button>
+        </div>
+        <ol class="log" id="event-log"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    Producers and consumers connect over <code>tcp://localhost:4000</code>. Run <code>npm run demo</code> for a sample workload.
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
