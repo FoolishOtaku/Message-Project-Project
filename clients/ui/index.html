@@ -283,6 +283,58 @@
     .publish-feedback.warn { color: var(--amber); }
     .publish-feedback.err { color: var(--rose); }
 
+    /* Template Actions Box */
+    .template-actions-box {
+      background: rgba(20, 184, 166, 0.05);
+      border: 1px dashed rgba(20, 184, 166, 0.3);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-template-all {
+      background: linear-gradient(135deg, rgba(20, 184, 166, 0.22), rgba(124, 92, 255, 0.22));
+      border: 1px solid rgba(20, 184, 166, 0.5);
+      color: #5eead4;
+      padding: 9px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .btn-template-all:hover {
+      background: linear-gradient(135deg, rgba(20, 184, 166, 0.38), rgba(124, 92, 255, 0.38));
+      border-color: #5eead4;
+      color: #fff;
+      box-shadow: 0 0 16px rgba(20, 184, 166, 0.35);
+      transform: translateY(-1px);
+    }
+    .btn-template-all:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .template-chips {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .template-chip-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+
     /* Active Consumers */
     .consumers-list {
       display: flex;
@@ -666,7 +718,7 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn-secondary" id="btn-toggle-sim">▶ Start Auto Traffic</button>
+      <button class="btn-secondary" id="btn-toggle-sim">▶ Start Auto Traffic (Adaptive)</button>
       <button class="btn-secondary" id="btn-reset-broker" style="border-color: rgba(244, 63, 94, 0.4); color: #fda4af;" title="Reset target broker database back to zero">🗑️ Reset Database</button>
     </div>
   </header>
@@ -727,6 +779,20 @@
         <div class="card-title">
           <span>📥 Spawn Consumer Worker</span>
         </div>
+
+        <div class="template-actions-box">
+          <button type="button" class="btn-template-all" id="btn-spawn-templates" title="Populate all 4 default template consumers at once">
+            ⚡ Populate Default Consumers (Billing, Shipping, Notifications, Inventory)
+          </button>
+          <div class="template-chips">
+            <span class="template-chip-label">Quick Fill:</span>
+            <button type="button" class="preset-btn" data-tpl-name="billing-worker-1" data-tpl-queue="billing" data-tpl-keys="order.created, order.paid">🛒 Billing</button>
+            <button type="button" class="preset-btn" data-tpl-name="shipping-service" data-tpl-queue="shipping" data-tpl-keys="order.paid">🚚 Shipping</button>
+            <button type="button" class="preset-btn" data-tpl-name="notification-worker" data-tpl-queue="notifications" data-tpl-keys="order.created, order.paid, user.registered">🔔 Notifications</button>
+            <button type="button" class="preset-btn" data-tpl-name="inventory-audit" data-tpl-queue="inventory" data-tpl-keys="order.created, order.refunded">📦 Inventory</button>
+          </div>
+        </div>
+
         <form id="form-consumer">
           <div class="form-group">
             <label for="input-consumer-name">Consumer Name</label>
@@ -871,7 +937,7 @@
     });
 
     // Presets
-    document.querySelectorAll('.preset-btn').forEach(btn => {
+    document.querySelectorAll('.preset-btn[data-key]').forEach(btn => {
       btn.addEventListener('click', () => {
         $('input-key').value = btn.dataset.key;
         try {
@@ -881,6 +947,37 @@
           $('input-payload').value = btn.dataset.payload;
         }
       });
+    });
+
+    // Quick-Fill Consumer Template Chips
+    document.querySelectorAll('[data-tpl-name]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('input-consumer-name').value = btn.dataset.tplName;
+        $('input-consumer-queue').value = btn.dataset.tplQueue;
+        $('input-consumer-keys').value = btn.dataset.tplKeys;
+      });
+    });
+
+    // Spawn All Default Template Consumers
+    $('btn-spawn-templates').addEventListener('click', async () => {
+      const btn = $('btn-spawn-templates');
+      btn.disabled = true;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '⚡ Spawning 4 Workers...';
+
+      try {
+        const res = await fetch('/api/consumer/spawn-templates', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to spawn templates');
+        if (data.errors && data.errors.length) {
+          console.warn('Some templates failed:', data.errors);
+        }
+      } catch (err) {
+        alert('Failed to spawn default consumers:\n' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
     });
 
     // Form Publish
@@ -972,11 +1069,11 @@
       simulatorRunning = running;
       const btn = $('btn-toggle-sim');
       if (running) {
-        btn.textContent = '⏹ Stop Auto Traffic';
+        btn.textContent = '⏹ Stop Auto Traffic (Adaptive Active)';
         btn.style.borderColor = 'var(--rose)';
         btn.style.color = 'var(--rose)';
       } else {
-        btn.textContent = '▶ Start Auto Traffic';
+        btn.textContent = '▶ Start Auto Traffic (Adaptive)';
         btn.style.borderColor = '';
         btn.style.color = '';
       }

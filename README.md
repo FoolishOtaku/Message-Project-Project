@@ -53,9 +53,9 @@ npm run client
 
 Now open **http://localhost:3000** in your browser:
 - **Publish messages** with 1-click presets (`order.created`, `order.paid`, `user.registered`, `order.refunded`) or enter custom JSON.
-- **Spawn consumers** visually by specifying queue and routing keys.
+- **Spawn consumers with 1 click**: click **"⚡ Populate Default Consumers"** to spin up 4 standard microservices (`billing`, `shipping`, `notifications`, `inventory`), or click template chips to quick-fill form inputs.
+- **Adaptive Auto-Traffic Bot**: click **"Start Auto Traffic (Adaptive)"** to generate traffic that dynamically discovers and routes to consumers in the broker/database, with ~20% randomized unroutable traffic.
 - **Live consumer inbox**: watch messages processed by your consumers in real time!
-- **Auto-traffic toggle**: click "Start Auto Traffic" to generate continuous traffic.
 
 ### Option B: Automated Shop Demo (Terminal)
 

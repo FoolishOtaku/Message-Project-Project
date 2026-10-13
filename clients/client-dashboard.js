@@ -195,14 +195,163 @@ function publicConsumer(c) {
   };
 }
 
-// ───────────────────────── Auto Traffic Simulator ─────────────────────────
+// ───────────────────────── Auto Traffic Simulator & Templates ─────────────────────────
 
-const SAMPLE_EVENTS = [
-  { key: 'order.created', payload: () => ({ orderId: Math.floor(1000 + Math.random() * 9000), customer: 'Budi Santoso', total: 150000 + Math.floor(Math.random() * 50) * 10000, items: ['Mechanical Keyboard', 'Desk Mat'] }) },
-  { key: 'order.paid', payload: () => ({ orderId: Math.floor(1000 + Math.random() * 9000), method: 'qris', bank: 'BCA', amount: 350000 }) },
-  { key: 'user.registered', payload: () => ({ userId: Math.floor(100 + Math.random() * 900), name: 'Citra Lestari', email: 'citra@example.com', registeredAt: new Date().toISOString() }) },
-  { key: 'order.refunded', payload: () => ({ orderId: Math.floor(1000 + Math.random() * 9000), reason: 'Customer requested cancellation' }) },
+const DEFAULT_TEMPLATES = [
+  { name: 'billing-worker-1', queue: 'billing', bindingKeys: ['order.created', 'order.paid'] },
+  { name: 'shipping-service', queue: 'shipping', bindingKeys: ['order.paid'] },
+  { name: 'notification-worker', queue: 'notifications', bindingKeys: ['order.created', 'order.paid', 'user.registered'] },
+  { name: 'inventory-audit', queue: 'inventory', bindingKeys: ['order.created', 'order.refunded'] },
 ];
+
+const UNROUTABLE_EVENTS = [
+  { key: 'nobody.listens', payload: () => ({ message: 'Testing unroutable routing key', timestamp: Date.now() }) },
+  { key: 'analytics.orphan', payload: () => ({ event: 'orphan_click', path: '/deprecated-page', userId: 404 }) },
+  { key: 'system.deadletter', payload: () => ({ alert: 'unbound_route_test', severity: 'warning' }) },
+  { key: 'unbound.telemetry', payload: () => ({ metric: 'ambient_temp', value: 24.8, host: 'unmonitored-device' }) },
+  { key: 'ghost.event', payload: () => ({ reason: 'No queue is bound to this key', generatedBy: 'adaptive-bot' }) },
+];
+
+const SAMPLE_CUSTOMERS = ['Budi Santoso', 'Citra Lestari', 'Agus Pratama', 'Dewi Anggraini', 'Eko Prasetyo', 'Siti Rahma'];
+const SAMPLE_ITEMS = ['Mechanical Keyboard', 'Desk Mat', 'Wireless Mouse', 'USB-C Cable', 'Monitor Arm', 'Coffee Mug', 'Headphones'];
+
+function generatePayloadFor(key) {
+  const k = String(key || '').toLowerCase();
+
+  if (k.includes('order.creat') || k.includes('order_creat')) {
+    return {
+      orderId: Math.floor(1000 + Math.random() * 9000),
+      customer: SAMPLE_CUSTOMERS[Math.floor(Math.random() * SAMPLE_CUSTOMERS.length)],
+      total: 150000 + Math.floor(Math.random() * 50) * 10000,
+      items: [
+        SAMPLE_ITEMS[Math.floor(Math.random() * SAMPLE_ITEMS.length)],
+        SAMPLE_ITEMS[Math.floor(Math.random() * SAMPLE_ITEMS.length)],
+      ],
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  if (k.includes('paid') || k.includes('payment')) {
+    return {
+      orderId: Math.floor(1000 + Math.random() * 9000),
+      method: ['qris', 'bca', 'mandiri', 'gopay'][Math.floor(Math.random() * 4)],
+      paid: true,
+      amount: 250000 + Math.floor(Math.random() * 30) * 10000,
+      paidAt: new Date().toISOString(),
+    };
+  }
+
+  if (k.includes('user') || k.includes('register') || k.includes('auth')) {
+    const name = SAMPLE_CUSTOMERS[Math.floor(Math.random() * SAMPLE_CUSTOMERS.length)];
+    const email = name.toLowerCase().replace(/\s+/g, '.') + '@example.com';
+    return {
+      userId: Math.floor(100 + Math.random() * 900),
+      name,
+      email,
+      registeredAt: new Date().toISOString(),
+    };
+  }
+
+  if (k.includes('refund')) {
+    return {
+      orderId: Math.floor(1000 + Math.random() * 9000),
+      reason: ['Customer cancellation', 'Defective product', 'Out of stock'][Math.floor(Math.random() * 3)],
+      refundAmount: 150000 + Math.floor(Math.random() * 20) * 10000,
+      processed: true,
+    };
+  }
+
+  if (k.includes('ship') || k.includes('delivery')) {
+    return {
+      trackingNumber: 'TRK-' + Math.floor(100000 + Math.random() * 900000),
+      courier: ['JNE', 'SiCepat', 'J&T', 'GoSend'][Math.floor(Math.random() * 4)],
+      destination: ['Jakarta', 'Bandung', 'Surabaya', 'Medan'][Math.floor(Math.random() * 4)],
+      status: 'in_transit',
+    };
+  }
+
+  if (k.includes('inventory') || k.includes('stock')) {
+    return {
+      sku: 'SKU-' + Math.floor(100 + Math.random() * 900),
+      stockDelta: -(Math.floor(Math.random() * 4) + 1),
+      warehouse: 'WH-CENTRAL-1',
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  if (k.includes('notif') || k.includes('alert') || k.includes('email')) {
+    return {
+      notificationId: 'notif_' + Math.floor(1000 + Math.random() * 9000),
+      channel: ['email', 'push_notification', 'sms'][Math.floor(Math.random() * 3)],
+      message: `Automatic alert notification for ${key}`,
+      sentAt: new Date().toISOString(),
+    };
+  }
+
+  // Dynamic fallback for any custom user routing key
+  return {
+    id: `evt_${Math.random().toString(36).slice(2, 8)}`,
+    routingKey: key,
+    metricValue: Math.floor(10 + Math.random() * 90),
+    status: 'dispatched',
+    generator: 'adaptive-traffic-bot',
+    timestamp: new Date().toISOString(),
+  };
+}
+
+let cachedRoutableKeys = [];
+let lastKeyDiscovery = 0;
+
+async function discoverActiveRoutingKeys() {
+  const now = Date.now();
+  if (now - lastKeyDiscovery < 2500 && cachedRoutableKeys.length > 0) {
+    return cachedRoutableKeys;
+  }
+
+  const keys = new Set();
+
+  // 1. Local active consumers in this client studio
+  for (const c of activeConsumers.values()) {
+    if (Array.isArray(c.bindingKeys)) {
+      c.bindingKeys.forEach((k) => k && keys.add(k));
+    }
+  }
+
+  // 2. Live routing table from target broker (/api/state)
+  try {
+    const res = await fetch(`${brokerUrl}/api/state`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const state = await res.json();
+      if (state.bindings) {
+        Object.keys(state.bindings).forEach((k) => k && keys.add(k));
+      }
+      if (Array.isArray(state.queues)) {
+        for (const q of state.queues) {
+          if (Array.isArray(q.bindingKeys)) {
+            q.bindingKeys.forEach((k) => k && keys.add(k));
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Past deliveries logged in SQLite database (/api/deliveries)
+  try {
+    const res = await fetch(`${brokerUrl}/api/deliveries?limit=50`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.items)) {
+        for (const item of data.items) {
+          if (item.routingKey) keys.add(item.routingKey);
+        }
+      }
+    }
+  } catch {}
+
+  cachedRoutableKeys = [...keys];
+  lastKeyDiscovery = now;
+  return cachedRoutableKeys;
+}
 
 function toggleSimulator() {
   if (simulatorRunning) {
@@ -213,8 +362,34 @@ function toggleSimulator() {
     simulatorRunning = true;
     simulatorTimer = setInterval(async () => {
       try {
-        const event = SAMPLE_EVENTS[Math.floor(Math.random() * SAMPLE_EVENTS.length)];
-        await publishMessage({ routingKey: event.key, payload: event.payload(), publisherName: 'auto-traffic-bot' });
+        const routableKeys = await discoverActiveRoutingKeys();
+
+        // 20% randomized unroutable rate, OR if no consumers/keys exist yet:
+        const shouldBeUnroutable = Math.random() < 0.20 || routableKeys.length === 0;
+
+        if (shouldBeUnroutable) {
+          const routableSet = new Set(routableKeys);
+          const safeUnroutable = UNROUTABLE_EVENTS.filter((e) => !routableSet.has(e.key));
+          const unroutable = safeUnroutable.length > 0
+            ? safeUnroutable[Math.floor(Math.random() * safeUnroutable.length)]
+            : { key: `unroutable.random.${Date.now().toString(36)}`, payload: () => ({ test: 'unroutable_random' }) };
+
+          await publishMessage({
+            routingKey: unroutable.key,
+            payload: unroutable.payload(),
+            publisherName: 'auto-traffic-bot',
+          });
+        } else {
+          // Adapt to current consumers/database: pick from known routable keys!
+          const key = routableKeys[Math.floor(Math.random() * routableKeys.length)];
+          const payload = generatePayloadFor(key);
+
+          await publishMessage({
+            routingKey: key,
+            payload,
+            publisherName: 'auto-traffic-bot',
+          });
+        }
       } catch (err) {
         console.error('Simulator publish error:', err.message);
       }
@@ -373,6 +548,42 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         sendJson(res, 400, { success: false, error: err.message });
       }
+    });
+    return;
+  }
+
+  // Spawn Default Template Consumers API
+  if (req.method === 'POST' && pathname === '/api/consumer/spawn-templates') {
+    (async () => {
+      const started = [];
+      const errors = [];
+
+      for (const tpl of DEFAULT_TEMPLATES) {
+        const alreadyActive = [...activeConsumers.values()].some(
+          (c) => c.queue === tpl.queue && c.name === tpl.name
+        );
+        if (alreadyActive) continue;
+
+        try {
+          const consumer = await startHttpConsumer({
+            name: tpl.name,
+            queue: tpl.queue,
+            bindingKeys: tpl.bindingKeys,
+          });
+          started.push(publicConsumer(consumer));
+        } catch (err) {
+          errors.push({ name: tpl.name, error: err.message });
+        }
+      }
+
+      sendJson(res, 200, {
+        success: true,
+        startedCount: started.length,
+        started,
+        errors,
+      });
+    })().catch((err) => {
+      sendJson(res, 500, { success: false, error: err.message });
     });
     return;
   }
