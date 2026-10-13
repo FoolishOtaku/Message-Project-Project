@@ -644,6 +644,7 @@
     </div>
     <div class="header-actions">
       <button class="btn-secondary" id="btn-toggle-sim">▶ Start Auto Traffic</button>
+      <button class="btn-secondary" id="btn-reset-broker" style="border-color: rgba(244, 63, 94, 0.4); color: #fda4af;" title="Reset target broker database back to zero">🗑️ Reset Database</button>
     </div>
   </header>
 
@@ -1246,6 +1247,34 @@
     $('modal-btn-refresh').addEventListener('click', reloadModalDeliveries);
     $('modal-search').addEventListener('input', reloadModalDeliveries);
 
+    $('btn-reset-broker').addEventListener('click', async () => {
+      const confirmed = window.confirm(
+        'Are you sure you want to reset the broker database?\n\n' +
+        'This will wipe all stored messages, delivery history, and queues on the target broker back to 0.'
+      );
+      if (!confirmed) return;
+
+      const btn = $('btn-reset-broker');
+      btn.disabled = true;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Resetting…';
+
+      try {
+        const res = await fetch('/api/reset', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok && !data.success) throw new Error(data.error || 'Failed to reset database');
+        messages = [];
+        renderMessages();
+        if (activeModalConsumer) reloadModalDeliveries();
+        alert('Database has been reset successfully!');
+      } catch (err) {
+        alert(`Failed to reset: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    });
+
     function escapeHtml(str) {
       if (str == null) return '';
       return String(str)
@@ -1287,9 +1316,10 @@
           if (activeModalConsumer && activeModalConsumer === data.item.consumerName) {
             reloadModalDeliveries();
           }
-        } else if (data.type === 'messages_cleared') {
+        } else if (data.type === 'messages_cleared' || data.type === 'reset') {
           messages = [];
           renderMessages();
+          if (activeModalConsumer) reloadModalDeliveries();
         } else if (data.type === 'simulator_state') {
           setSimulatorState(data.running);
         }

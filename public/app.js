@@ -44,6 +44,7 @@ const els = {
   filterQueue: $('filter-queue'),
   filterSearch: $('filter-search'),
   btnRefreshDeliveries: $('btn-refresh-deliveries'),
+  btnResetDb: $('btn-reset-db'),
   modal: {
     backdrop: $('consumer-modal'),
     name: $('modal-consumer-name'),
@@ -506,6 +507,20 @@ const handlers = {
       });
     onLiveDelivery(e);
     log('deliver', 'recv', `<b>${esc(e.queue)}</b> → <b>${esc(clientName(e.clientId))}</b> ${keyHtml(e.routingKey)}`);
+  },
+
+  'state.reset'(e) {
+    if (e.snapshot) applySnapshot(e.snapshot);
+    deliveriesData = [];
+    knownConsumersList = [];
+    updateConsumerDropdown();
+    updateQueueDropdown();
+    renderDeliveries();
+    if (activeModalConsumer) {
+      modalDeliveries = [];
+      renderModalMessages();
+    }
+    log('warn', 'reset', '<b>Broker and Database reset: all history cleared</b>');
   },
 };
 
@@ -991,6 +1006,32 @@ els.filterSearch.addEventListener('input', () => {
 });
 
 els.btnRefreshDeliveries.addEventListener('click', loadDeliveries);
+
+if (els.btnResetDb) {
+  els.btnResetDb.addEventListener('click', async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to reset the broker database?\n\n' +
+      'This will permanently delete all stored messages, delivery history, and queued messages back to 0.'
+    );
+    if (!confirmed) return;
+
+    els.btnResetDb.disabled = true;
+    const originalText = els.btnResetDb.innerHTML;
+    els.btnResetDb.innerHTML = 'Resetting…';
+
+    try {
+      const res = await fetch('/api/reset', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset database');
+      loadDeliveries();
+    } catch (err) {
+      alert(`Failed to reset database: ${err.message}`);
+    } finally {
+      els.btnResetDb.disabled = false;
+      els.btnResetDb.innerHTML = originalText;
+    }
+  });
+}
 
 renderAll();
 connect();

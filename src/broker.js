@@ -216,6 +216,28 @@ class Broker extends EventEmitter {
     return this.storage.getKnownConsumers();
   }
 
+  /**
+   * Reset broker state: clear database, clear messages waiting in queues, reset stats to 0.
+   * Clients and bindings are retained so connected producers/consumers do not disconnect.
+   */
+  reset() {
+    this.storage.reset();
+    for (const queue of this.queues.values()) {
+      queue.messages = [];
+      queue.nextConsumer = 0;
+    }
+    this.stats = {
+      published: 0,
+      routed: 0,
+      delivered: 0,
+      unroutable: 0,
+    };
+    this.#emit('state.reset', {
+      snapshot: this.snapshot(),
+      message: 'Database and queues have been reset to zero',
+    });
+  }
+
   // ───────────────────────── Introspection ─────────────────────────
 
   snapshot() {

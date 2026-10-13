@@ -264,6 +264,21 @@ class Storage {
       unroutable: unroutableCount,
     };
   }
+
+  /**
+   * Reset database: clear all messages, deliveries, and pending queues.
+   */
+  reset() {
+    this.db.exec(`
+      DELETE FROM pending_queue;
+      DELETE FROM deliveries;
+      DELETE FROM messages;
+    `);
+    try {
+      this.db.exec(`DELETE FROM sqlite_sequence WHERE name IN ('deliveries', 'pending_queue');`);
+    } catch {}
+    this.db.exec(`VACUUM;`);
+  }
 }
 
 module.exports = { Storage };

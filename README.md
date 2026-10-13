@@ -142,6 +142,31 @@ Since Cloudflare Tunnel proxies HTTP/HTTPS traffic (e.g. `https://brokerkurir.as
   BROKER_URL=https://brokerkurir.aselaboratory.com node clients/producer.js order.created '{"orderId": 42}'
   ```
 
+### 4. Resetting the Database (Start from Beginning)
+
+If you want to clear all message logs, queue buffers, and consumer delivery history back to a clean slate:
+
+- **From the Web Dashboard (Recommended & Instant)**:
+  Open **https://brokerkurir.aselaboratory.com**, scroll to the *Consumer Processed Data History* section, and click the red **🗑️ Reset Database** button. Confirm the dialog, and the entire SQLite database and queues will instantly reset to 0 without restarting the server!
+
+- **From Client Studio (`http://localhost:3000`)**:
+  Click the **🗑️ Reset Database** button in the top right header bar.
+
+- **Via Terminal / cURL**:
+  ```bash
+  curl -X POST https://brokerkurir.aselaboratory.com/api/reset
+  ```
+
+- **Via NixOS Server (Complete Disk Wipe)**:
+  If you want to physically remove the SQLite database files from the host:
+  ```bash
+  cd ~/Message-Project-Project
+  docker compose down
+  rm -f data/kurir.db*
+  docker compose up -d
+  ```
+
+
 
 ## Configuration
 

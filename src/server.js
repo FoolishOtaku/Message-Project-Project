@@ -113,6 +113,7 @@ const httpServer = http.createServer((req, res) => {
   if (isGetOrHead && pathname === '/api/deliveries') return handleDeliveries(req, res, url);
   if (isGetOrHead && pathname === '/api/consumer/stream') return handleConsumerStream(req, res, url);
   if (req.method === 'POST' && pathname === '/api/publish') return handlePublish(req, res);
+  if (req.method === 'POST' && pathname === '/api/reset') return handleReset(req, res);
   if (isGetOrHead) return serveStatic(pathname, res);
 
   sendJson(res, 405, { error: 'Method not allowed' });
@@ -218,6 +219,15 @@ function handlePublish(req, res) {
       sendJson(res, 400, { error: e.message });
     }
   });
+}
+
+function handleReset(req, res) {
+  try {
+    broker.reset();
+    sendJson(res, 200, { success: true, message: 'Database and queues reset successfully' });
+  } catch (err) {
+    sendJson(res, 500, { success: false, error: err.message });
+  }
 }
 
 function serveStatic(pathname, res) {

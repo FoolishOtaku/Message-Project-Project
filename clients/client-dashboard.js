@@ -325,6 +325,24 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // Reset Broker Database API
+  if (req.method === 'POST' && pathname === '/api/reset') {
+    try {
+      const brokerRes = await fetch(`${brokerUrl}/api/reset`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(4000),
+      });
+      receivedMessages = [];
+      broadcast({ type: 'reset' });
+      const data = await brokerRes.json();
+      return sendJson(res, brokerRes.status, data);
+    } catch (err) {
+      receivedMessages = [];
+      broadcast({ type: 'reset' });
+      return sendJson(res, 200, { success: true, localOnly: true, error: err.message });
+    }
+  }
+
   // Publish Message API
   if (req.method === 'POST' && pathname === '/api/publish') {
     let body = '';
